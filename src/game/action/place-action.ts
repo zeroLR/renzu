@@ -1,4 +1,4 @@
-import { isWin, type Cell, type Player, type Pos } from '../board/board';
+import { isInsideBoard, isWinningMove, type Board, type Player, type Position } from '../board/board';
 import { activePlayer, appendAction, completeTurn, endMatch, isBoardFull, type MatchState } from '../match/match-state';
 
 export type PlaceActionError = 'match-over' | 'wrong-phase' | 'out-of-bounds' | 'occupied';
@@ -8,7 +8,7 @@ export type PlaceActionResult =
       ok: true;
       state: MatchState;
       actor: Player;
-      at: Pos;
+      at: Position;
       won: boolean;
       draw: boolean;
       consumedTurn: true;
@@ -16,16 +16,16 @@ export type PlaceActionResult =
   | {
       ok: false;
       state: MatchState;
-      at: Pos;
+      at: Position;
       consumedTurn: false;
       error: PlaceActionError;
     };
 
-function inBounds(board: Cell[][], at: Pos): boolean {
-  return at.row >= 0 && at.row < board.length && at.col >= 0 && at.col < (board[at.row]?.length ?? 0);
+function inBounds(board: Board, at: Position): boolean {
+  return isInsideBoard(board, at.row, at.col);
 }
 
-export function resolvePlaceAction(state: MatchState, actor: Player, at: Pos): PlaceActionResult {
+export function resolvePlaceAction(state: MatchState, actor: Player, at: Position): PlaceActionResult {
   if (state.status !== 'playing') {
     return { ok: false, state, at, consumedTurn: false, error: 'match-over' };
   }
@@ -46,7 +46,7 @@ export function resolvePlaceAction(state: MatchState, actor: Player, at: Pos): P
   board[at.row][at.col] = actor;
 
   let next: MatchState = appendAction({ ...state, board }, { actor, kind: 'place', at });
-  const won = isWin(board, at, actor);
+  const won = isWinningMove(board, at, actor);
 
   if (won) {
     next = endMatch(next, actor === 1 ? 'victory' : 'defeat');
