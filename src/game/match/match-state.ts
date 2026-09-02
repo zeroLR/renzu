@@ -1,4 +1,4 @@
-import { createBoard, emptyCells, type Cell, type Player, type Pos } from '../board/board';
+import { createBoard, emptyCells, type Board, type Player, type Position } from '../board/board';
 
 export type MatchStatus = 'playing' | 'victory' | 'defeat' | 'draw';
 export type TurnPhase = 'player' | 'opponent' | 'over';
@@ -9,20 +9,20 @@ export interface MatchActionRecord {
   turn: number;
   actor: Player;
   kind: MatchActionKind;
-  at: Pos;
-  source?: Pos;
+  at: Position;
+  source?: Position;
   abilityId?: string;
 }
 
 export interface MatchState {
-  board: Cell[][];
+  board: Board;
   turn: number;
   phase: TurnPhase;
   status: MatchStatus;
   actionHistory: MatchActionRecord[];
 }
 
-export function createMatchState(board: Cell[][] = createBoard()): MatchState {
+export function createMatchState(board: Board = createBoard()): MatchState {
   return {
     board,
     turn: 1,
