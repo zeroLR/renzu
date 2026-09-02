@@ -20,6 +20,7 @@ Current foundation:
 - strict TypeScript configuration
 - PR/main CI validation
 - domain-oriented migration architecture
+- GitHub Pages selected as the staging/production hosting platform
 
 ## Development
 
@@ -41,7 +42,12 @@ The legacy directory structure is intentionally not copied wholesale. See [`docs
 ## Release direction
 
 ```text
-feature PR -> CI -> main -> staging -> release tag -> production
+feature PR -> CI -> main -> GitHub Pages staging -> release tag -> GitHub Pages production
 ```
 
-Staging and production deployment are a separate infrastructure slice so hosting/environment decisions remain independent from gameplay migration.
+Canonical GitHub Pages paths:
+
+- production: `/renzu/`
+- staging: `/renzu/staging/`
+
+The Pages publication workflow is implemented as a dedicated infrastructure slice after the standalone foundation is merged.
