@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createMatchState, activePlayer, acceptsPlayerInput, completeTurn, endMatch } from '../src/game/match/match-state';
-
-.describe;
+import { activePlayer, acceptsPlayerInput, completeTurn, createMatchState, endMatch } from '../src/game/match/match-state';
 
 describe('match state', () => {
   it('starts on player turn and accepts input', () => {
