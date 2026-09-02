@@ -73,17 +73,53 @@ The legacy prototype experienced a production blank-screen failure where assets 
 - emit observable renderer logs;
 - render a visible DOM fallback if all renderer attempts fail.
 
-## Release direction
+## Hosting contract
 
-Target promotion flow:
+RENZU uses GitHub Pages as its production hosting platform, continuing the deployment technology validated by the `gomoku-rpg` prototype.
+
+Because `zeroLR/renzu` is a GitHub Project Pages repository, deployed assets must not assume `/` hosting.
+
+Canonical paths:
+
+- local development: `/`
+- production: `/renzu/`
+- staging: `/renzu/staging/`
+
+Vite derives its `base` from `RENZU_DEPLOY_TARGET` so staging and production builds emit correct asset URLs.
+
+The deployment infrastructure should preserve both environments in one Pages site rather than treating every deployment as a destructive replacement. This follows the useful part of the legacy playground `pages-state` model while removing its multi-game complexity.
+
+Target site state:
+
+```text
+site/
+├─ index.html            # production RENZU
+├─ assets/               # production assets
+└─ staging/
+   ├─ index.html         # staging RENZU
+   └─ assets/            # staging assets
+```
+
+## Release flow
 
 ```mermaid
 flowchart LR
   A[Feature PR] --> B[CI]
   B --> C[main]
-  C --> D[Staging]
-  D --> E[Release Tag]
-  E --> F[Production]
+  C --> D[Build Staging]
+  D --> E[Publish /renzu/staging/]
+  E --> F[Release Tag]
+  F --> G[Build Production]
+  G --> H[Publish /renzu/]
 ```
 
-CI is established in P1. Staging/production deployment is intentionally handled as its own infrastructure slice after the hosting target is selected.
+Rules:
+
+1. Pull requests validate tests and production compilation but do not deploy.
+2. `main` is the staging source and should remain deployable.
+3. A versioned release/tag promotes a tested revision to production.
+4. Staging publication must not overwrite production state.
+5. Production publication must not remove staging state.
+6. GitHub Pages asset paths must be smoke-tested from the deployed URL, not only from local Vite preview.
+
+The actual Pages workflow is implemented as a dedicated infrastructure slice after the standalone foundation is merged.
