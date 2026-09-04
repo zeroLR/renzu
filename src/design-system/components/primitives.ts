@@ -1,7 +1,9 @@
 import { Container, Graphics, Text, type FederatedPointerEvent } from 'pixi.js';
 import { color, radius, type } from '../tokens/tokens';
 
-export function label(text: string, size = type.body, fill = color.ink, weight = '500'): Text {
+type FontWeight = '400' | '500' | '600' | '700';
+
+export function label(text: string, size: number = type.body, fill: number = color.ink, weight: FontWeight = '500'): Text {
   return new Text({
     text,
     style: {
