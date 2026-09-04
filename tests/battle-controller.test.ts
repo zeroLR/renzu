@@ -28,13 +28,13 @@ describe('battle interaction controller', () => {
     expect(abilities.every((action) => action.actor === 1)).toBe(true);
   });
 
-  it('reports invalid empty-board source selection without mutating the match', () => {
+  it('reports an unavailable ability without mutating the match', () => {
     const game = session();
     const controller = createBattleController(game, () => 0);
     controller.selectAbility('blink');
-    controller.tapCell({ row: 0, col: 0 });
 
     expect(controller.interaction().lastError).toBe('ability-unavailable');
     expect(game.state.match.turn).toBe(1);
+    expect(game.state.match.board.flat().every((cell) => cell === 0)).toBe(true);
   });
 });
