@@ -17,7 +17,9 @@ describe('ability action resolution', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.state.boardEffects).toEqual([{ kind: 'guard', at: { row: 4, col: 4 }, owner: 1 }]);
+    expect(result.state.boardEffects).toEqual([
+      { kind: 'guard', at: { row: 4, col: 4 }, owner: 1, expiry: { kind: 'owner-turns', remaining: 1 } },
+    ]);
     expect(result.state.abilities[1].cooldowns.guard).toBe(3);
     expect(result.state.match.actionHistory.at(-1)?.abilityId).toBe('guard');
     expect(result.state.match.phase).toBe('opponent');
@@ -44,7 +46,12 @@ describe('ability action resolution', () => {
     if (!result.ok) return;
     expect(result.state.match.board[4][5]).toBe(0);
     expect(result.state.abilities[1].resources.pressure).toBe(0);
-    expect(result.state.boardEffects).toContainEqual({ kind: 'corruption', at: { row: 4, col: 5 }, owner: 1 });
+    expect(result.state.boardEffects).toContainEqual({
+      kind: 'corruption',
+      at: { row: 4, col: 5 },
+      owner: 1,
+      expiry: { kind: 'opponent-turns', remaining: 1 },
+    });
   });
 
   it('resolves Arcanist Phase and refunds one Mana through Flow', () => {
@@ -61,7 +68,7 @@ describe('ability action resolution', () => {
     expect(result.state.boardEffects.filter((effect) => effect.kind === 'seal')).toHaveLength(4);
   });
 
-  it('keeps Swordmaster Step as a non-turn-consuming action when its condition is ready', () => {
+  it('arms Swordmaster Step as a precommit follow-up without consuming the turn', () => {
     let state = createState();
     state = { ...state, abilities: setAbilityCondition(state.abilities, 1, 'momentum-present', true) };
 
@@ -70,6 +77,8 @@ describe('ability action resolution', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.consumedTurn).toBe(false);
+    expect(result.timing).toBe('precommit-follow-up');
+    expect(result.state.timing?.pendingFollowUp).toEqual({ actor: 1, abilityId: 'step', kind: 'precommit' });
     expect(result.state.match.phase).toBe('player');
     expect(result.state.match.turn).toBe(1);
   });
