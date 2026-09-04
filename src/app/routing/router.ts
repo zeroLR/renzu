@@ -3,7 +3,8 @@ export type AppRoute =
   | { screen: 'play' }
   | { screen: 'story' }
   | { screen: 'free-battle' }
-  | { screen: 'heroes' };
+  | { screen: 'heroes' }
+  | { screen: 'battle' };
 
 export interface AppRouter {
   current(): AppRoute;

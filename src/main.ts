@@ -1,5 +1,7 @@
 import { createRenderer } from './app/bootstrap/create-renderer';
+import { createProductFlow } from './app/game-session/product-flow';
 import { createAppRouter } from './app/routing/router';
+import { createBrowserPlayerProfileStorage } from './platform/storage/player-profile-storage';
 import { createProductShell } from './presentation/screens/product-shell';
 import './style.css';
 
@@ -20,7 +22,9 @@ async function bootstrap(): Promise<void> {
   try {
     const app = await createRenderer();
     const router = createAppRouter();
-    const shell = createProductShell(router);
+    const profileStorage = createBrowserPlayerProfileStorage();
+    const flow = createProductFlow(profileStorage);
+    const shell = createProductShell(router, flow);
 
     app.stage.addChild(shell.root);
     host.replaceChildren(app.canvas);
