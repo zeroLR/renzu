@@ -34,7 +34,32 @@ A staging deployment replaces only `staging/`. A production deployment replaces 
 6. Replace only the target environment content.
 7. Persist the complete tree back to `pages-state`.
 8. Upload and deploy the complete Pages artifact.
-9. Smoke-check the deployed HTML and its first absolute build asset.
+9. Probe the user-facing custom-domain HTML and first build asset as a diagnostic.
+10. Validate real browser/device availability through the active staging QA matrix.
+
+## Deployment health contract
+
+Deployment health is split between deterministic release gates and user-facing diagnostics.
+
+### Blocking gates
+
+A deployment must fail when any of these fail:
+
+- tests;
+- target build;
+- generated base-path / asset verification;
+- Pages artifact composition/upload;
+- `actions/deploy-pages`.
+
+These checks are controlled by the repository or GitHub Pages and directly indicate whether the requested revision was built and published correctly.
+
+### Diagnostic custom-domain probe
+
+The workflow also requests the deployed custom-domain page and its first build asset. This probe remains useful for surfacing routing/CDN problems, but it is intentionally non-blocking.
+
+The custom domain can reject hosted GitHub Actions runner traffic even when the same deployment is available in a normal browser. In that case the workflow records a warning and step-summary diagnostic instead of turning a successful Pages deployment into a false-negative failure.
+
+Real user-facing availability is part of the R1 device/browser smoke matrix. A browser-visible outage discovered there is still a release blocker even when `actions/deploy-pages` reports success.
 
 ## GitHub repository requirement
 
