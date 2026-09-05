@@ -16,7 +16,12 @@ import {
   type AbilityActionTiming,
   type ActionTimingState,
 } from './action-timing';
-import { canActivate, consumeActivation, type AbilityActivationRule } from '../../heroes/economies/ability-economy';
+import {
+  advanceAbilityEconomyAfterTurn,
+  canActivate,
+  consumeActivation,
+  type AbilityActivationRule,
+} from '../../heroes/economies/ability-economy';
 import type { AbilityStates } from '../../heroes/economies/ability-state';
 import { heroes, isAbilityAccessible, type AbilityId, type HeroId } from '../../heroes/domain/hero-definition';
 import { applyAfterAbilityPassive, type PassiveOutcome } from '../../heroes/domain/passive-engine';
@@ -110,13 +115,30 @@ function resolveBoardMutation(state: AbilityActionState, intent: AbilityIntent):
     if (board[target.row][target.col] !== enemy || isGuarded(effects, target) || !hasAdjacentFriendly(board, target, actor)) return null;
     board[target.row][target.col] = 0;
     effects.push(createBoardEffect('corruption', target, actor, { kind: 'opponent-turns', remaining: 1 }));
+  } else if (abilityId === 'charge') {
+    if (!source || !isInsideBoard(board, source.row, source.col) || board[source.row][source.col] !== actor || !adjacent(source, target)) return null;
+    if (isGuarded(effects, source)) return null;
+    if (board[target.row][target.col] === 0) {
+      if (isBlocked(effects, target)) return null;
+      board[source.row][source.col] = 0;
+      board[target.row][target.col] = actor;
+    } else if (board[target.row][target.col] === enemy) {
+      if (isGuarded(effects, target)) return null;
+      const pushed = { row: target.row + (target.row - source.row), col: target.col + (target.col - source.col) };
+      if (!isInsideBoard(board, pushed.row, pushed.col) || board[pushed.row][pushed.col] !== 0 || isBlocked(effects, pushed)) return null;
+      board[pushed.row][pushed.col] = enemy;
+      board[target.row][target.col] = actor;
+      board[source.row][source.col] = 0;
+    } else {
+      return null;
+    }
   } else if (abilityId === 'phase') {
     if (board[target.row][target.col] !== 0 || isBlocked(effects, target)) return null;
     board[target.row][target.col] = actor;
     for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]] as const) {
       const at = { row: target.row + dr, col: target.col + dc };
       if (isInsideBoard(board, at.row, at.col) && board[at.row][at.col] === 0 && !isBlocked(effects, at)) {
-        effects.push(createBoardEffect('seal', at, actor, { kind: 'opponent-turns', remaining: 1 }));
+        effects.push(createBoardEffect('flame', at, actor, { kind: 'opponent-turns', remaining: 1 }));
       }
     }
   } else if (abilityId === 'step') {
@@ -153,7 +175,11 @@ export function resolveAbilityAction(state: AbilityActionState, intent: AbilityI
   const mutated = resolveBoardMutation({ ...state, timing: timingState }, intent);
   if (!mutated) return { ok: false, state, consumedTurn: false, error: 'invalid-target' };
 
-  const consumedAbilities = consumeActivation(mutated.abilities, intent.actor, activation, intent.abilityId);
+  const consumedTurn = abilityConsumesTurn(timing);
+  const advancedAbilities = consumedTurn
+    ? advanceAbilityEconomyAfterTurn(mutated.abilities, intent.actor)
+    : mutated.abilities;
+  const consumedAbilities = consumeActivation(advancedAbilities, intent.actor, activation, intent.abilityId);
   const passive = applyAfterAbilityPassive(consumedAbilities, intent.heroId, intent.actor);
   let match = appendAction(mutated.match, {
     actor: intent.actor,
@@ -171,7 +197,6 @@ export function resolveAbilityAction(state: AbilityActionState, intent: AbilityI
   }
 
   let nextTiming = intent.followUp ? clearFollowUp(timingState) : beginAbilityTiming(timingState, intent.actor, intent.abilityId, timing);
-  const consumedTurn = abilityConsumesTurn(timing);
   let boardEffects = mutated.boardEffects;
 
   if (consumedTurn && match.status === 'playing') {
