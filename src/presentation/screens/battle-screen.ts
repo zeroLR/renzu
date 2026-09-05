@@ -5,12 +5,16 @@ import { actionButton, label, surface } from '../../design-system/components/pri
 import { color, layout, type } from '../../design-system/tokens/tokens';
 import type { AbilityAction } from '../../game/action/legal-action';
 import { heroes, type AbilityId } from '../../heroes/domain/hero-definition';
+import { boardLineBounds, boardPoint, boardSpacing, type BoardGeometry } from './board-geometry';
 
 const controllers = new WeakMap<GameSession, BattleController>();
-const BOARD_X = 33;
-const BOARD_Y = 190;
-const BOARD_SIZE = 324;
-const CELL = BOARD_SIZE / 9;
+const BOARD: BoardGeometry = {
+  originX: 33,
+  originY: 190,
+  size: 324,
+  inset: 18,
+  logicalSize: 9,
+};
 
 export interface BattleResultActions {
   canNext: boolean;
@@ -37,12 +41,17 @@ export function renderBattleScreen(
   const state = session.state;
   const interaction = controller.interaction();
   const playerTurn = state.match.status === 'playing' && state.match.phase === 'player';
+  const cpuTurn = state.match.status === 'playing' && state.match.phase === 'opponent';
 
   const mode = session.config.mode.kind === 'story' ? `STORY · ${session.config.mode.encounterId}` : 'FREE BATTLE';
   const modeNode = label(mode, type.caption, color.gold, '700');
   modeNode.position.set(33, 92);
   const turnNode = label(
-    state.match.status === 'playing' ? (playerTurn ? `TURN ${state.match.turn} · YOUR MOVE` : `TURN ${state.match.turn} · CPU`) : state.match.status.toUpperCase(),
+    state.match.status === 'playing'
+      ? playerTurn
+        ? `TURN ${state.match.turn} · YOUR MOVE`
+        : `TURN ${state.match.turn} · CPU THINKING`
+      : state.match.status.toUpperCase(),
     type.heading,
     color.ink,
     '700',
@@ -52,33 +61,44 @@ export function renderBattleScreen(
   matchup.position.set(33, 151);
   root.addChild(modeNode, turnNode, matchup);
 
-  const boardSurface = new Graphics().roundRect(BOARD_X - 8, BOARD_Y - 8, BOARD_SIZE + 16, BOARD_SIZE + 16, 12).fill(0x171a20).stroke({ color: color.edge, width: 1 });
+  const boardSurface = new Graphics()
+    .roundRect(BOARD.originX - 8, BOARD.originY - 8, BOARD.size + 16, BOARD.size + 16, 12)
+    .fill(0x171a20)
+    .stroke({ color: color.edge, width: 1 });
   root.addChild(boardSurface);
 
+  const bounds = boardLineBounds(BOARD);
+  const spacing = boardSpacing(BOARD);
   const grid = new Graphics();
-  for (let index = 0; index <= 9; index += 1) {
-    const offset = index * CELL;
-    grid.moveTo(BOARD_X + offset, BOARD_Y).lineTo(BOARD_X + offset, BOARD_Y + BOARD_SIZE);
-    grid.moveTo(BOARD_X, BOARD_Y + offset).lineTo(BOARD_X + BOARD_SIZE, BOARD_Y + offset);
+  for (let index = 0; index < BOARD.logicalSize; index += 1) {
+    const offset = index * spacing;
+    grid.moveTo(bounds.left + offset, bounds.top).lineTo(bounds.left + offset, bounds.bottom);
+    grid.moveTo(bounds.left, bounds.top + offset).lineTo(bounds.right, bounds.top + offset);
   }
   grid.stroke({ color: 0x3a3e47, width: 1 });
   root.addChild(grid);
 
   state.match.board.forEach((row, rowIndex) => {
     row.forEach((cell, colIndex) => {
-      const x = BOARD_X + colIndex * CELL;
-      const y = BOARD_Y + rowIndex * CELL;
-      const hit = new Graphics().rect(x, y, CELL, CELL).fill({ color: color.ink, alpha: 0.001 });
+      const at = { row: rowIndex, col: colIndex };
+      const point = boardPoint(BOARD, at);
+      const hit = new Graphics().circle(point.x, point.y, spacing * 0.46).fill({ color: color.ink, alpha: 0.001 });
       hit.eventMode = playerTurn ? 'static' : 'none';
       if (playerTurn) hit.cursor = 'pointer';
       hit.on('pointertap', () => {
-        controller.tapCell({ row: rowIndex, col: colIndex });
+        controller.tapCell(at);
         onChange();
+        if (session.state.match.status === 'playing' && session.state.match.phase === 'opponent') {
+          void controller.advanceCpuTurn(onChange);
+        }
       });
       root.addChild(hit);
 
       if (cell !== 0) {
-        const stone = new Graphics().circle(x + CELL / 2, y + CELL / 2, 12).fill(cell === 1 ? 0xe8ddc3 : 0x747c91).stroke({ color: cell === 1 ? 0xf6f0e1 : 0xaab2c4, width: 1 });
+        const stone = new Graphics()
+          .circle(point.x, point.y, 12)
+          .fill(cell === 1 ? 0xe8ddc3 : 0x747c91)
+          .stroke({ color: cell === 1 ? 0xf6f0e1 : 0xaab2c4, width: 1 });
         root.addChild(stone);
       }
     });
@@ -86,24 +106,29 @@ export function renderBattleScreen(
 
   const lastAction = state.match.actionHistory[state.match.actionHistory.length - 1];
   if (lastAction) {
-    const x = BOARD_X + lastAction.at.col * CELL + CELL / 2;
-    const y = BOARD_Y + lastAction.at.row * CELL + CELL / 2;
-    const marker = new Graphics().circle(x, y, 4).fill(lastAction.actor === 1 ? color.gold : color.inkSoft);
+    const point = boardPoint(BOARD, lastAction.at);
+    const marker = new Graphics().circle(point.x, point.y, 4).fill(lastAction.actor === 1 ? color.gold : color.inkSoft);
     root.addChild(marker);
   }
 
   state.boardEffects.forEach((effect) => {
-    const x = BOARD_X + effect.at.col * CELL + CELL / 2;
-    const y = BOARD_Y + effect.at.row * CELL + CELL / 2;
-    const marker = new Graphics().circle(x, y, 15).stroke({ color: effect.kind === 'guard' ? color.gold : color.danger, width: 2 });
+    const point = boardPoint(BOARD, effect.at);
+    const marker = new Graphics()
+      .circle(point.x, point.y, 15)
+      .stroke({ color: effect.kind === 'guard' ? color.gold : color.danger, width: 2 });
     marker.alpha = 0.8;
     root.addChild(marker);
   });
 
   if (interaction.selectedSource) {
-    const x = BOARD_X + interaction.selectedSource.col * CELL;
-    const y = BOARD_Y + interaction.selectedSource.row * CELL;
-    root.addChild(new Graphics().rect(x + 2, y + 2, CELL - 4, CELL - 4).stroke({ color: color.gold, width: 2 }));
+    const point = boardPoint(BOARD, interaction.selectedSource);
+    root.addChild(new Graphics().circle(point.x, point.y, 17).stroke({ color: color.gold, width: 2 }));
+  }
+
+  if (cpuTurn) {
+    const pulse = new Graphics().circle(BOARD.originX + BOARD.size - 22, 164, interaction.cpuThinking ? 4 : 3).fill(color.gold);
+    pulse.alpha = interaction.cpuThinking ? 0.9 : 0.5;
+    root.addChild(pulse);
   }
 
   const hud = surface(layout.contentWidth, 206, true);
@@ -114,13 +139,15 @@ export function renderBattleScreen(
   const heroNode = label(`${hero.id.toUpperCase()} · ${hero.economy.kind.toUpperCase()}`, type.caption, color.inkSoft, '700');
   heroNode.position.set(43, 568);
   const instruction = label(
-    interaction.selectedAbilityId
-      ? interaction.selectedSource
-        ? `${interaction.selectedAbilityId.toUpperCase()} · SELECT TARGET`
-        : `${interaction.selectedAbilityId.toUpperCase()} · SELECT ${interaction.selectedAbilityId === 'blink' || interaction.selectedAbilityId === 'sever' ? 'SOURCE' : 'TARGET'}`
-      : 'PLACE A STONE OR USE AN ABILITY',
+    cpuTurn
+      ? 'OPPONENT IS CONSIDERING THE BOARD'
+      : interaction.selectedAbilityId
+        ? interaction.selectedSource
+          ? `${interaction.selectedAbilityId.toUpperCase()} · SELECT TARGET`
+          : `${interaction.selectedAbilityId.toUpperCase()} · SELECT ${interaction.selectedAbilityId === 'blink' || interaction.selectedAbilityId === 'sever' ? 'SOURCE' : 'TARGET'}`
+        : 'PLACE A STONE OR USE AN ABILITY',
     10,
-    interaction.selectedAbilityId ? color.gold : color.muted,
+    cpuTurn || interaction.selectedAbilityId ? color.gold : color.muted,
     '700',
   );
   instruction.position.set(43, 592);
@@ -129,7 +156,7 @@ export function renderBattleScreen(
   const legal = controller.legalActions();
   const legalAbilities = legal.filter((action): action is AbilityAction => action.kind === 'ability');
   hero.defaultLoadout.forEach((abilityId: AbilityId, index: number) => {
-    const ready = legalAbilities.some((action) => action.abilityId === abilityId);
+    const ready = playerTurn && legalAbilities.some((action) => action.abilityId === abilityId);
     const selected = interaction.selectedAbilityId === abilityId;
     const cooldown = state.abilities[1].cooldowns[abilityId] ?? 0;
     const title = cooldown > 0 ? `${abilityId.toUpperCase()} · ${cooldown}` : abilityId.toUpperCase();

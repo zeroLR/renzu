@@ -9,6 +9,13 @@ export interface BattleInteractionState {
   selectedAbilityId: AbilityId | null;
   selectedSource: Position | null;
   lastError: string | null;
+  cpuThinking: boolean;
+}
+
+export interface CpuChoreographyOptions {
+  thinkDelayMs?: number;
+  followUpDelayMs?: number;
+  delay?: (ms: number) => Promise<void>;
 }
 
 export interface BattleController {
@@ -17,21 +24,40 @@ export interface BattleController {
   legalActions(): LegalAction[];
   selectAbility(abilityId: AbilityId): void;
   tapCell(at: Position): void;
+  advanceCpuTurn(onStep?: () => void, options?: CpuChoreographyOptions): Promise<void>;
   clearSelection(): void;
 }
 
 const samePosition = (a: Position | undefined, b: Position): boolean => !!a && a.row === b.row && a.col === b.col;
+const defaultDelay = (ms: number): Promise<void> => new Promise((resolve) => globalThis.setTimeout(resolve, ms));
 
 export function createBattleController(session: GameSession, random?: () => number): BattleController {
   let selectedAbilityId: AbilityId | null = null;
   let selectedSource: Position | null = null;
   let lastError: string | null = null;
+  let cpuThinking = false;
+  let cpuSequence = 0;
 
   const legalActions = (): LegalAction[] => listLegalActions(session.state, session.config.playerHeroId, 1);
 
-  const runCpuUntilPlayer = (): void => {
+  const advanceCpuTurn = async (
+    onStep?: () => void,
+    options: CpuChoreographyOptions = {},
+  ): Promise<void> => {
+    if (cpuThinking || session.state.match.status !== 'playing' || session.state.match.phase !== 'opponent') return;
+
+    cpuThinking = true;
+    const sequence = ++cpuSequence;
+    const delay = options.delay ?? defaultDelay;
+    const thinkDelayMs = options.thinkDelayMs ?? 520;
+    const followUpDelayMs = options.followUpDelayMs ?? 280;
+    onStep?.();
+
     let guard = 0;
-    while (session.state.match.status === 'playing' && session.state.match.phase === 'opponent' && guard < 4) {
+    while (sequence === cpuSequence && session.state.match.status === 'playing' && session.state.match.phase === 'opponent' && guard < 4) {
+      await delay(guard === 0 ? thinkDelayMs : followUpDelayMs);
+      if (sequence !== cpuSequence) break;
+
       const result: CpuTurnResult = resolveCpuTurn(session.state, {
         heroId: session.config.cpuHeroId,
         difficulty: session.config.cpuDifficulty,
@@ -39,10 +65,18 @@ export function createBattleController(session: GameSession, random?: () => numb
       });
       if (!result.ok) {
         lastError = result.error;
-        return;
+        break;
       }
+
       session.state = result.state;
+      lastError = null;
       guard += 1;
+      onStep?.();
+    }
+
+    if (sequence === cpuSequence) {
+      cpuThinking = false;
+      onStep?.();
     }
   };
 
@@ -56,7 +90,6 @@ export function createBattleController(session: GameSession, random?: () => numb
     selectedAbilityId = null;
     selectedSource = null;
     lastError = null;
-    if (result.consumedTurn) runCpuUntilPlayer();
   };
 
   const selectAbility = (abilityId: AbilityId): void => {
@@ -75,7 +108,7 @@ export function createBattleController(session: GameSession, random?: () => numb
   };
 
   const tapCell = (at: Position): void => {
-    if (session.state.match.status !== 'playing' || session.state.match.phase !== 'player') return;
+    if (cpuThinking || session.state.match.status !== 'playing' || session.state.match.phase !== 'player') return;
     const actions = legalActions();
 
     if (!selectedAbilityId) {
@@ -113,10 +146,11 @@ export function createBattleController(session: GameSession, random?: () => numb
 
   return {
     session: () => session,
-    interaction: () => ({ selectedAbilityId, selectedSource, lastError }),
+    interaction: () => ({ selectedAbilityId, selectedSource, lastError, cpuThinking }),
     legalActions,
     selectAbility,
     tapCell,
+    advanceCpuTurn,
     clearSelection() {
       selectedAbilityId = null;
       selectedSource = null;
