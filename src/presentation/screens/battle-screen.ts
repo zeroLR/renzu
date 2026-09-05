@@ -12,6 +12,13 @@ const BOARD_Y = 190;
 const BOARD_SIZE = 324;
 const CELL = BOARD_SIZE / 9;
 
+export interface BattleResultActions {
+  canNext: boolean;
+  onRematch(): void;
+  onNext(): void;
+  onReturn(): void;
+}
+
 function controllerFor(session: GameSession): BattleController {
   const existing = controllers.get(session);
   if (existing) return existing;
@@ -20,7 +27,12 @@ function controllerFor(session: GameSession): BattleController {
   return created;
 }
 
-export function renderBattleScreen(root: Container, session: GameSession, onChange: () => void): void {
+export function renderBattleScreen(
+  root: Container,
+  session: GameSession,
+  onChange: () => void,
+  resultActions?: BattleResultActions,
+): void {
   const controller = controllerFor(session);
   const state = session.state;
   const interaction = controller.interaction();
@@ -71,6 +83,14 @@ export function renderBattleScreen(root: Container, session: GameSession, onChan
       }
     });
   });
+
+  const lastAction = state.match.actionHistory[state.match.actionHistory.length - 1];
+  if (lastAction) {
+    const x = BOARD_X + lastAction.at.col * CELL + CELL / 2;
+    const y = BOARD_Y + lastAction.at.row * CELL + CELL / 2;
+    const marker = new Graphics().circle(x, y, 4).fill(lastAction.actor === 1 ? color.gold : color.inkSoft);
+    root.addChild(marker);
+  }
 
   state.boardEffects.forEach((effect) => {
     const x = BOARD_X + effect.at.col * CELL + CELL / 2;
@@ -132,20 +152,39 @@ export function renderBattleScreen(root: Container, session: GameSession, onChan
     root.addChild(resource);
   }
 
+  if (lastAction) {
+    const actionText = lastAction.kind === 'ability' && lastAction.abilityId
+      ? `LAST · ${lastAction.actor === 1 ? 'YOU' : 'CPU'} · ${lastAction.abilityId.toUpperCase()}`
+      : `LAST · ${lastAction.actor === 1 ? 'YOU' : 'CPU'} · PLACE`;
+    const recent = label(actionText, 10, color.muted, '600');
+    recent.position.set(43, 716);
+    root.addChild(recent);
+  }
+
   if (interaction.lastError) {
     const error = label(interaction.lastError.replaceAll('-', ' ').toUpperCase(), 10, color.danger, '700');
-    error.position.set(43, 716);
+    error.position.set(190, 716);
     root.addChild(error);
   }
 
   if (state.match.status !== 'playing') {
-    const overlay = new Graphics().roundRect(58, 310, 274, 128, 12).fill({ color: 0x0f1115, alpha: 0.94 }).stroke({ color: color.gold, width: 1 });
+    const overlay = new Graphics().roundRect(50, 286, 290, 208, 12).fill({ color: 0x0f1115, alpha: 0.96 }).stroke({ color: color.gold, width: 1 });
     const result = label(state.match.status === 'victory' ? 'VICTORY' : state.match.status === 'draw' ? 'DRAW' : 'DEFEAT', 28, state.match.status === 'victory' ? color.gold : color.ink, '700');
     result.anchor.set(0.5);
-    result.position.set(layout.referenceWidth / 2, 354);
+    result.position.set(layout.referenceWidth / 2, 326);
     const detail = label(`MATCH ENDED · TURN ${state.match.turn}`, 10, color.inkSoft, '600');
     detail.anchor.set(0.5);
-    detail.position.set(layout.referenceWidth / 2, 394);
+    detail.position.set(layout.referenceWidth / 2, 360);
     root.addChild(overlay, result, detail);
+
+    if (resultActions) {
+      const rematch = actionButton('REMATCH', 126, 44, resultActions.onRematch);
+      rematch.position.set(66, 390);
+      const secondary = actionButton(resultActions.canNext ? 'NEXT' : 'RETURN', 126, 44, resultActions.canNext ? resultActions.onNext : resultActions.onReturn, true);
+      secondary.position.set(198, 390);
+      const exit = actionButton('BACK TO STORY', 258, 36, resultActions.onReturn);
+      exit.position.set(66, 442);
+      root.addChild(rematch, secondary, exit);
+    }
   }
 }
