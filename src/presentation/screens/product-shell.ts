@@ -25,6 +25,12 @@ export function createProductShell(router: AppRouter, flow: ProductFlow): Produc
     render();
   };
 
+  const leaveBattle = (): void => {
+    flow.clearSession();
+    router.back();
+    render();
+  };
+
   const addBackButton = (): void => {
     const back = actionButton('‹', 48, 48, () => {
       if (router.current().screen === 'battle') flow.clearSession();
@@ -173,7 +179,24 @@ export function createProductShell(router: AppRouter, flow: ProductFlow): Produc
       content.addChild(missing);
       return;
     }
-    renderBattleScreen(content, session, () => render({ screen: 'battle' }));
+
+    const settlement = flow.settleActiveSession();
+    const canNext = session.state.match.status === 'victory'
+      && session.config.mode.kind === 'story'
+      && settlement.nextStoryEncounterId !== null;
+
+    renderBattleScreen(content, session, () => render({ screen: 'battle' }), {
+      canNext,
+      onRematch: () => {
+        const result = flow.rematch();
+        if (result.ok) render({ screen: 'battle' });
+      },
+      onNext: () => {
+        const result = flow.startNextStoryEncounter();
+        if (result.ok) render({ screen: 'battle' });
+      },
+      onReturn: leaveBattle,
+    });
   };
 
   const renderPlaceholder = (eyebrow: string, titleText: string, subtitle: string): void => {
