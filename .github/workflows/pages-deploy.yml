@@ -1,0 +1,160 @@
+name: Pages Deploy
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Deployment target
+        required: true
+        default: staging
+        type: choice
+        options:
+          - staging
+          - production
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: renzu-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      target: ${{ steps.target.outputs.value }}
+    steps:
+      - name: Resolve target
+        id: target
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            TARGET="${{ inputs.target }}"
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            TARGET="production"
+          else
+            TARGET="staging"
+          fi
+          echo "value=$TARGET" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Test
+        run: npm test
+
+      - name: Build staging
+        if: steps.target.outputs.value == 'staging'
+        run: npm run build:staging
+
+      - name: Verify staging artifact
+        if: steps.target.outputs.value == 'staging'
+        run: npm run verify:staging
+
+      - name: Build production
+        if: steps.target.outputs.value == 'production'
+        run: npm run build:production
+
+      - name: Verify production artifact
+        if: steps.target.outputs.value == 'production'
+        run: npm run verify:production
+
+      - name: Restore persisted Pages tree
+        shell: bash
+        run: |
+          mkdir -p _site
+          if git fetch origin pages-state:refs/remotes/origin/pages-state; then
+            git archive refs/remotes/origin/pages-state | tar -x -C _site
+          fi
+
+      - name: Compose staging tree
+        if: steps.target.outputs.value == 'staging'
+        shell: bash
+        run: |
+          rm -rf _site/staging
+          mkdir -p _site/staging
+          cp -a dist/. _site/staging/
+          touch _site/.nojekyll
+
+      - name: Compose production tree
+        if: steps.target.outputs.value == 'production'
+        shell: bash
+        run: |
+          find _site -mindepth 1 -maxdepth 1 ! -name staging -exec rm -rf {} +
+          cp -a dist/. _site/
+          touch _site/.nojekyll
+
+      - name: Persist Pages tree
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          cd _site
+          git init
+          git checkout --orphan pages-state
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "deploy: ${{ steps.target.outputs.value }} ${{ github.sha }}"
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push --force origin pages-state
+          rm -rf .git
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Smoke deployed page and first asset
+        shell: bash
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+          TARGET: ${{ needs.build.outputs.target }}
+        run: |
+          if [[ "$TARGET" == "staging" ]]; then
+            APP_URL="${PAGE_URL%/}/staging/"
+          else
+            APP_URL="${PAGE_URL%/}/"
+          fi
+
+          echo "Smoke checking $APP_URL"
+          HTML="$(curl --fail --silent --show-error --retry 6 --retry-delay 5 "$APP_URL")"
+          ASSET_PATH="$(printf '%s' "$HTML" | grep -Eo '(src|href)="/[^"]+"' | head -n 1 | cut -d '"' -f 2)"
+          if [[ -z "$ASSET_PATH" ]]; then
+            echo "No absolute build asset found in deployed index.html" >&2
+            exit 1
+          fi
+
+          ORIGIN="$(printf '%s' "$PAGE_URL" | sed -E 's#(https?://[^/]+).*#\1#')"
+          curl --fail --silent --show-error --retry 6 --retry-delay 5 --output /dev/null "${ORIGIN}${ASSET_PATH}"
+          echo "Smoke check passed: ${ORIGIN}${ASSET_PATH}"

@@ -6,6 +6,10 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "tsc --noEmit && vite build",
+    "build:staging": "tsc --noEmit && vite build --mode staging",
+    "build:production": "tsc --noEmit && vite build --mode production",
+    "verify:staging": "node scripts/verify-pages-build.mjs staging",
+    "verify:production": "node scripts/verify-pages-build.mjs production",
     "preview": "vite preview --host 0.0.0.0",
     "test": "vitest run"
   },
