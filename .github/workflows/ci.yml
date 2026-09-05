@@ -26,5 +26,8 @@ jobs:
       - name: Test
         run: npm test
 
-      - name: Build
-        run: npm run build
+      - name: Build staging artifact
+        run: npm run build:staging
+
+      - name: Verify staging artifact
+        run: npm run verify:staging
