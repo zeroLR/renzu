@@ -1,14 +1,60 @@
-import { advanceBoardEffectsAfterTurn } from '../combat/board-effects';
+import { advanceBoardEffectsAfterTurn, isBlocked } from '../combat/board-effects';
 import { clearFollowUp, createActionTimingState } from './action-timing';
 import { resolveAbilityAction, type AbilityActionResult, type AbilityActionState } from './ability-action';
 import type { LegalAction } from './legal-action';
 import { resolvePlaceAction } from './place-action';
+import { advanceAbilityEconomyAfterTurn } from '../../heroes/economies/ability-economy';
+import type { HeroId } from '../../heroes/domain/hero-definition';
+import { applyAfterPlacePassive } from '../../heroes/domain/passive-engine';
 
 export type SessionActionResult =
   | { ok: true; state: AbilityActionState; consumedTurn: boolean }
   | { ok: false; state: AbilityActionState; consumedTurn: false; error: string };
 
-export function resolveSessionAction(state: AbilityActionState, action: LegalAction): SessionActionResult {
+function resolvePlacementTurn(
+  state: AbilityActionState,
+  actor: 1 | 2,
+  at: { row: number; col: number },
+  heroId?: HeroId,
+  clearPending = false,
+): SessionActionResult {
+  if (isBlocked(state.boardEffects, at)) {
+    return { ok: false, state, consumedTurn: false, error: 'blocked-target' };
+  }
+
+  const placed = resolvePlaceAction(state.match, actor, at);
+  if (!placed.ok) return { ok: false, state, consumedTurn: false, error: placed.error };
+
+  let abilities = advanceAbilityEconomyAfterTurn(state.abilities, actor);
+  if (heroId) {
+    abilities = applyAfterPlacePassive(abilities, heroId, {
+      board: placed.state.board,
+      actor,
+      at,
+      patternReward: 0,
+    }).states;
+  }
+
+  return {
+    ok: true,
+    consumedTurn: true,
+    state: {
+      ...state,
+      match: placed.state,
+      abilities,
+      boardEffects: advanceBoardEffectsAfterTurn(state.boardEffects, actor),
+      timing: clearPending
+        ? clearFollowUp(state.timing ?? createActionTimingState())
+        : state.timing ?? createActionTimingState(),
+    },
+  };
+}
+
+export function resolveSessionAction(
+  state: AbilityActionState,
+  action: LegalAction,
+  heroId?: HeroId,
+): SessionActionResult {
   if (action.kind === 'ability') {
     const result: AbilityActionResult = resolveAbilityAction(state, action);
     return result.ok
@@ -29,32 +75,8 @@ export function resolveSessionAction(state: AbilityActionState, action: LegalAct
         : { ok: false, state, consumedTurn: false, error: result.error };
     }
 
-    const placed = resolvePlaceAction(state.match, action.actor, action.action.at);
-    if (!placed.ok) return { ok: false, state, consumedTurn: false, error: placed.error };
-
-    return {
-      ok: true,
-      consumedTurn: true,
-      state: {
-        ...state,
-        match: placed.state,
-        boardEffects: advanceBoardEffectsAfterTurn(state.boardEffects, action.actor),
-        timing: clearFollowUp(state.timing ?? createActionTimingState()),
-      },
-    };
+    return resolvePlacementTurn(state, action.actor, action.action.at, heroId, true);
   }
 
-  const placed = resolvePlaceAction(state.match, action.actor, action.at);
-  if (!placed.ok) return { ok: false, state, consumedTurn: false, error: placed.error };
-
-  return {
-    ok: true,
-    consumedTurn: true,
-    state: {
-      ...state,
-      match: placed.state,
-      boardEffects: advanceBoardEffectsAfterTurn(state.boardEffects, action.actor),
-      timing: state.timing ?? createActionTimingState(),
-    },
-  };
+  return resolvePlacementTurn(state, action.actor, action.at, heroId);
 }

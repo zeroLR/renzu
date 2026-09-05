@@ -1,6 +1,6 @@
 import type { Player, Position } from '../board/board';
 
-export type BoardEffectKind = 'guard' | 'seal' | 'corruption';
+export type BoardEffectKind = 'guard' | 'seal' | 'corruption' | 'flame';
 export type EffectExpiry =
   | { kind: 'owner-turns'; remaining: number }
   | { kind: 'opponent-turns'; remaining: number }
@@ -41,7 +41,7 @@ export function isGuarded(effects: readonly BoardEffect[], at: Position): boolea
 export function isBlocked(effects: readonly BoardEffect[], at: Position): boolean {
   return effects.some(
     (effect) =>
-      (effect.kind === 'seal' || effect.kind === 'corruption') && samePosition(effect.at, at),
+      (effect.kind === 'seal' || effect.kind === 'corruption' || effect.kind === 'flame') && samePosition(effect.at, at),
   );
 }
 

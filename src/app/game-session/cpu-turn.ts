@@ -42,7 +42,7 @@ export function resolveCpuTurn(state: AbilityActionState, config: CpuTurnConfig)
 
   if (!decision) return { ok: false, state, error: 'no-legal-action' };
 
-  const resolved: SessionActionResult = resolveSessionAction(state, decision.action);
+  const resolved: SessionActionResult = resolveSessionAction(state, decision.action, config.heroId);
   if (!resolved.ok) {
     return {
       ok: false,

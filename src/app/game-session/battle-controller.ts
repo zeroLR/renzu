@@ -47,7 +47,7 @@ export function createBattleController(session: GameSession, random?: () => numb
   };
 
   const apply = (action: LegalAction): void => {
-    const result = resolveSessionAction(session.state, action);
+    const result = resolveSessionAction(session.state, action, session.config.playerHeroId);
     if (!result.ok) {
       lastError = result.error;
       return;

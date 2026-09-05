@@ -22,6 +22,26 @@ describe('legal action model', () => {
     expect(actions).toHaveLength(80);
   });
 
+  it('rejects blocked placement even when session resolver is called directly', () => {
+    const state = createState();
+    state.boardEffects = [createBoardEffect('flame', { row: 4, col: 4 }, 2, { kind: 'opponent-turns', remaining: 1 })];
+
+    const result = resolveSessionAction(state, { kind: 'place', actor: 1, at: { row: 4, col: 4 } }, 'vanguard');
+
+    expect(result).toMatchObject({ ok: false, error: 'blocked-target' });
+    expect(state.match.board[4][4]).toBe(0);
+  });
+
+  it('does not expose unsupported hero abilities as legal actions', () => {
+    const actions = listLegalActions(createState(), 'architect', 1);
+    const abilityIds = actions
+      .filter((action) => action.kind === 'ability')
+      .map((action) => action.kind === 'ability' ? action.abilityId : null);
+
+    expect(abilityIds).not.toContain('rally');
+    expect(abilityIds).not.toContain('lattice');
+  });
+
   it('exposes precommit placement as follow-up after Swordmaster Step', () => {
     let state = createState();
     state = { ...state, abilities: setAbilityCondition(state.abilities, 1, 'momentum-present', true) };
@@ -54,7 +74,7 @@ describe('legal action model', () => {
     if (!armed.ok) return;
 
     const action = listLegalActions(armed.state, 'swordmaster', 1)[0];
-    const result = resolveSessionAction(armed.state, action);
+    const result = resolveSessionAction(armed.state, action, 'swordmaster');
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;

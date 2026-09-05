@@ -1,7 +1,7 @@
 import { activePlayer, type MatchState } from '../match/match-state';
 import { isBlocked, type BoardEffect } from '../combat/board-effects';
 import type { Player, Position } from '../board/board';
-import type { AbilityId, HeroId } from '../../heroes/domain/hero-definition';
+import { heroes, type AbilityId, type HeroId } from '../../heroes/domain/hero-definition';
 import type { AbilityActionState } from './ability-action';
 import { resolveAbilityAction } from './ability-action';
 
@@ -28,6 +28,17 @@ export interface FollowUpAction {
   sourceAbilityId: AbilityId;
   action: PlaceAction | AbilityAction;
 }
+
+const SUPPORTED_ABILITIES = new Set<AbilityId>([
+  'blink',
+  'guard',
+  'charge',
+  'seal',
+  'phase',
+  'corrupt',
+  'step',
+  'sever',
+]);
 
 export function listLegalPlaceActions(
   match: MatchState,
@@ -71,7 +82,7 @@ export function listLegalAbilityActions(
   const actions: AbilityAction[] = [];
   const targets = boardPositions(state);
   const sources = ownPositions(state, actor);
-  const abilities = ['blink', 'guard', 'charge', 'bulwark', 'seal', 'phase', 'corrupt', 'rally', 'lattice', 'step', 'sever'] as const;
+  const abilities = heroes[heroId].skillPool.filter((abilityId) => SUPPORTED_ABILITIES.has(abilityId));
 
   for (const abilityId of abilities) {
     if (abilityId === 'step') {
@@ -80,7 +91,7 @@ export function listLegalAbilityActions(
       continue;
     }
 
-    const needsSource = abilityId === 'blink' || abilityId === 'sever';
+    const needsSource = abilityId === 'blink' || abilityId === 'charge' || abilityId === 'sever';
     if (needsSource) {
       for (const source of sources) {
         for (const target of targets) {
