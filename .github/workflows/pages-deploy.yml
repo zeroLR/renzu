@@ -111,7 +111,7 @@ jobs:
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add -A
-          git commit -m "deploy: ${TARGET:-${{ steps.target.outputs.value }}} ${{ github.sha }}"
+          git commit -m "deploy: ${{ steps.target.outputs.value }} ${{ github.sha }}"
           git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git push --force origin pages-state
           rm -rf .git
@@ -134,3 +134,27 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Smoke deployed page and first asset
+        shell: bash
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+          TARGET: ${{ needs.build.outputs.target }}
+        run: |
+          if [[ "$TARGET" == "staging" ]]; then
+            APP_URL="${PAGE_URL%/}/staging/"
+          else
+            APP_URL="${PAGE_URL%/}/"
+          fi
+
+          echo "Smoke checking $APP_URL"
+          HTML="$(curl --fail --silent --show-error --retry 6 --retry-delay 5 "$APP_URL")"
+          ASSET_PATH="$(printf '%s' "$HTML" | grep -Eo '(src|href)="/[^"]+"' | head -n 1 | cut -d '"' -f 2)"
+          if [[ -z "$ASSET_PATH" ]]; then
+            echo "No absolute build asset found in deployed index.html" >&2
+            exit 1
+          fi
+
+          ORIGIN="$(printf '%s' "$PAGE_URL" | sed -E 's#(https?://[^/]+).*#\1#')"
+          curl --fail --silent --show-error --retry 6 --retry-delay 5 --output /dev/null "${ORIGIN}${ASSET_PATH}"
+          echo "Smoke check passed: ${ORIGIN}${ASSET_PATH}"
