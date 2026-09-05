@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createProductFlow } from '../src/app/game-session/product-flow';
 import type { PlayerProfileStorage } from '../src/platform/storage/player-profile-storage';
-import { createPlayerProfile, type PlayerProfile } from '../src/progression/profile/player-profile';
+import { createPlayerProfile } from '../src/progression/profile/player-profile';
 import { endMatch } from '../src/game/match/match-state';
 
 function memoryStorage(): PlayerProfileStorage & { saves(): number } {
