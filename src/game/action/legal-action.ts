@@ -5,7 +5,7 @@ import { heroes, type AbilityId, type HeroId } from '../../heroes/domain/hero-de
 import type { AbilityActionState } from './ability-action';
 import { resolveAbilityAction } from './ability-action';
 
-export type LegalAction = PlaceAction | AbilityAction | FollowUpAction;
+export type LegalAction = PlaceAction | AbilityAction | FollowUpAction | EndFollowUpAction;
 
 export interface PlaceAction {
   kind: 'place';
@@ -27,6 +27,12 @@ export interface FollowUpAction {
   actor: Player;
   sourceAbilityId: AbilityId;
   action: PlaceAction | AbilityAction;
+}
+
+export interface EndFollowUpAction {
+  kind: 'end-follow-up';
+  actor: Player;
+  sourceAbilityId: AbilityId;
 }
 
 const SUPPORTED_ABILITIES = new Set<AbilityId>([
@@ -85,10 +91,16 @@ export function listLegalAbilityActions(
   const actions: AbilityAction[] = [];
   const targets = boardPositions(state);
   const sources = ownPositions(state, actor);
+  const pending = state.timing?.pendingFollowUp;
   const abilities = heroes[heroId].skillPool.filter((abilityId) => SUPPORTED_ABILITIES.has(abilityId));
 
   for (const abilityId of abilities) {
+    if (abilityId === 'sever' && !(pending?.actor === actor && pending.kind === 'triggered' && pending.abilityId === 'sever')) {
+      continue;
+    }
+
     if (abilityId === 'step') {
+      if (pending) continue;
       const candidate: AbilityAction = { kind: 'ability', actor, heroId, abilityId, target: { row: 0, col: 0 } };
       if (resolveAbilityAction(state, candidate).ok) actions.push(candidate);
       continue;
@@ -127,6 +139,21 @@ export function listLegalActions(
       sourceAbilityId: pending.abilityId,
       action,
     }));
+  }
+
+  if (pending?.actor === actor && pending.kind === 'triggered') {
+    const followUps = listLegalAbilityActions(state, heroId, actor)
+      .filter((action) => action.abilityId === pending.abilityId)
+      .map((action) => ({
+        kind: 'follow-up' as const,
+        actor,
+        sourceAbilityId: pending.abilityId,
+        action,
+      }));
+    return [
+      ...followUps,
+      { kind: 'end-follow-up' as const, actor, sourceAbilityId: pending.abilityId },
+    ];
   }
 
   const place = listLegalPlaceActions(state.match, actor, state.boardEffects);
