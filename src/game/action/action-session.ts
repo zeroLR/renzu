@@ -1,5 +1,6 @@
-import { advanceBoardEffectsAfterTurn, isBlocked } from '../combat/board-effects';
+import { advanceBoardEffectsAfterTurn, createBoardEffect, isBlocked } from '../combat/board-effects';
 import { appendAction, completeTurn } from '../match/match-state';
+import { evaluatePlacementPattern } from '../rules/placement-pattern';
 import { clearFollowUp, createActionTimingState, type ActionTimingState } from './action-timing';
 import { resolveAbilityAction, type AbilityActionResult, type AbilityActionState } from './ability-action';
 import { listLegalAbilityActions, type LegalAction } from './legal-action';
@@ -58,21 +59,28 @@ function resolvePlacementTurn(
     });
   }
 
+  const pattern = evaluatePlacementPattern(placed.state.board, at, actor);
   let abilities = state.abilities;
+  let boardEffects = state.boardEffects;
   if (heroId) {
-    abilities = applyAfterPlacePassive(abilities, heroId, {
-      board: placed.state.board,
-      actor,
-      at,
-      patternReward: 0,
+    const passive = applyAfterPlacePassive(abilities, heroId, {
+      pattern,
       preserveMomentum: precommittedStep,
-    }).states;
+    });
+    abilities = passive.states;
+    if (passive.boardEffect === 'guard') {
+      boardEffects = [
+        ...boardEffects,
+        createBoardEffect('guard', at, actor, { kind: 'opponent-turns', remaining: 1 }),
+      ];
+    }
   }
 
   const afterPlacement: AbilityActionState = {
     ...state,
     match,
     abilities,
+    boardEffects,
     timing: precommittedStep
       ? clearFollowUp(state.timing ?? createActionTimingState())
       : state.timing ?? createActionTimingState(),

@@ -49,7 +49,7 @@ function placeWithStepForSever(): AbilityActionState {
 }
 
 describe('Swordmaster follow-up lifecycle', () => {
-  it('Step keeps its charge while armed, then consumes it to preserve Momentum on placement', () => {
+  it('Step keeps its charge while armed, then consumes it to preserve Momentum on a quiet placement', () => {
     let state = createState();
     state = {
       ...state,
@@ -97,13 +97,13 @@ describe('Swordmaster follow-up lifecycle', () => {
     expect(placed.state.timing?.pendingFollowUp).toBeNull();
   });
 
-  it('opens Sever after a Step-protected placement when full Momentum and a legal push exist', () => {
+  it('opens Sever and refreshes Step after a protected placement creates a pattern', () => {
     const state = placeWithStepForSever();
 
     expect(state.match.phase).toBe('player');
     expect(state.timing?.pendingFollowUp).toEqual({ actor: 1, abilityId: 'sever', kind: 'triggered' });
     expect(getAbilityResource(state.abilities, 1, 'momentum')).toBe(3);
-    expect(state.abilities[1].charges.step).toBe(0);
+    expect(state.abilities[1].charges.step).toBe(1);
 
     const legal = listLegalActions(state, 'swordmaster', 1);
     expect(legal.some((action) => action.kind === 'end-follow-up')).toBe(true);
