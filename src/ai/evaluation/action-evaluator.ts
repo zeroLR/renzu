@@ -37,7 +37,7 @@ function linePotential(board: Board, at: Position, player: Player): number {
   return 12;
 }
 
-function actionTarget(action: LegalAction): Position {
+function actionTarget(action: Exclude<LegalAction, { kind: 'end-follow-up' }>): Position {
   if (action.kind === 'place') return action.at;
   if (action.kind === 'follow-up') return action.action.kind === 'place' ? action.action.at : action.action.target;
   return action.target;
@@ -53,6 +53,15 @@ export function evaluateAction(
   actor: Player,
   profile: AiDifficultyProfile,
 ): EvaluatedAction {
+  if (action.kind === 'end-follow-up') {
+    return {
+      action,
+      score: 0,
+      breakdown: { attack: 0, defense: 0, position: 0, ability: 0, total: 0 },
+      reasons: ['FOLLOW_UP_SKIP'],
+    };
+  }
+
   const target = actionTarget(action);
   const enemy: Player = actor === 1 ? 2 : 1;
   const reasons: string[] = [];
