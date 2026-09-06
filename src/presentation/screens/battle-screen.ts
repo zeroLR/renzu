@@ -44,7 +44,9 @@ export function renderBattleScreen(
   const interaction = controller.interaction();
   const playerTurn = state.match.status === 'playing' && state.match.phase === 'player';
   const cpuTurn = state.match.status === 'playing' && state.match.phase === 'opponent';
-  const triggeredFollowUp = state.timing?.pendingFollowUp?.actor === 1 && state.timing.pendingFollowUp.kind === 'triggered';
+  const pendingFollowUp = state.timing?.pendingFollowUp;
+  const precommitFollowUp = pendingFollowUp?.actor === 1 && pendingFollowUp.kind === 'precommit';
+  const triggeredFollowUp = pendingFollowUp?.actor === 1 && pendingFollowUp.kind === 'triggered';
 
   const mode = session.config.mode.kind === 'story' ? `STORY · ${session.config.mode.encounterId}` : 'FREE BATTLE';
   const modeNode = label(mode, type.caption, color.gold, '700');
@@ -54,7 +56,9 @@ export function renderBattleScreen(
       ? playerTurn
         ? triggeredFollowUp
           ? `TURN ${state.match.turn} · FOLLOW-UP`
-          : `TURN ${state.match.turn} · YOUR MOVE`
+          : precommitFollowUp
+            ? `TURN ${state.match.turn} · STEP ARMED`
+            : `TURN ${state.match.turn} · YOUR MOVE`
         : `TURN ${state.match.turn} · CPU THINKING`
       : state.match.status.toUpperCase(),
     type.heading,
@@ -148,13 +152,15 @@ export function renderBattleScreen(
       ? 'OPPONENT IS CONSIDERING THE BOARD'
       : triggeredFollowUp && !interaction.selectedAbilityId
         ? 'SEVER AVAILABLE · USE IT OR END TURN'
-        : interaction.selectedAbilityId
-          ? interaction.selectedSource
-            ? `${interaction.selectedAbilityId.toUpperCase()} · SELECT TARGET`
-            : `${interaction.selectedAbilityId.toUpperCase()} · SELECT ${needsSource(interaction.selectedAbilityId) ? 'SOURCE' : 'TARGET'}`
-          : 'PLACE A STONE OR USE AN ABILITY',
+        : precommitFollowUp
+          ? 'STEP ARMED · PLACE A STONE'
+          : interaction.selectedAbilityId
+            ? interaction.selectedSource
+              ? `${interaction.selectedAbilityId.toUpperCase()} · SELECT TARGET`
+              : `${interaction.selectedAbilityId.toUpperCase()} · SELECT ${needsSource(interaction.selectedAbilityId) ? 'SOURCE' : 'TARGET'}`
+            : 'PLACE A STONE OR USE AN ABILITY',
     10,
-    cpuTurn || triggeredFollowUp || interaction.selectedAbilityId ? color.gold : color.muted,
+    cpuTurn || precommitFollowUp || triggeredFollowUp || interaction.selectedAbilityId ? color.gold : color.muted,
     '700',
   );
   instruction.position.set(43, 592);
