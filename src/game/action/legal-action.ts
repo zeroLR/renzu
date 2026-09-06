@@ -33,9 +33,12 @@ const SUPPORTED_ABILITIES = new Set<AbilityId>([
   'blink',
   'guard',
   'charge',
+  'bulwark',
   'seal',
   'phase',
   'corrupt',
+  'rally',
+  'lattice',
   'step',
   'sever',
 ]);
@@ -91,7 +94,7 @@ export function listLegalAbilityActions(
       continue;
     }
 
-    const needsSource = abilityId === 'blink' || abilityId === 'charge' || abilityId === 'sever';
+    const needsSource = abilityId === 'blink' || abilityId === 'charge' || abilityId === 'rally' || abilityId === 'sever';
     if (needsSource) {
       for (const source of sources) {
         for (const target of targets) {
