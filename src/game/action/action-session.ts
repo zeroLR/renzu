@@ -1,5 +1,5 @@
 import { advanceBoardEffectsAfterTurn, isBlocked } from '../combat/board-effects';
-import { completeTurn } from '../match/match-state';
+import { appendAction, completeTurn } from '../match/match-state';
 import { clearFollowUp, createActionTimingState, type ActionTimingState } from './action-timing';
 import { resolveAbilityAction, type AbilityActionResult, type AbilityActionState } from './ability-action';
 import { listLegalAbilityActions, type LegalAction } from './legal-action';
@@ -48,14 +48,15 @@ function resolvePlacementTurn(
   const placed = resolvePlaceAction(state.match, actor, at, { completeTurn: false });
   if (!placed.ok) return { ok: false, state, consumedTurn: false, error: placed.error };
 
-  const beforePassive: AbilityActionState = {
-    ...state,
-    match: placed.state,
-    timing: precommittedStep
-      ? clearFollowUp(state.timing ?? createActionTimingState())
-      : state.timing ?? createActionTimingState(),
-  };
-  const preserveForSever = canOpenTriggeredSever(beforePassive, actor, heroId);
+  let match = placed.state;
+  if (precommittedStep) {
+    match = appendAction(match, {
+      actor,
+      kind: 'ability',
+      at,
+      abilityId: 'step',
+    });
+  }
 
   let abilities = state.abilities;
   if (heroId) {
@@ -64,13 +65,20 @@ function resolvePlacementTurn(
       actor,
       at,
       patternReward: 0,
-      preserveMomentum: precommittedStep || preserveForSever,
+      preserveMomentum: precommittedStep,
     }).states;
   }
 
-  const afterPlacement: AbilityActionState = { ...beforePassive, abilities };
+  const afterPlacement: AbilityActionState = {
+    ...state,
+    match,
+    abilities,
+    timing: precommittedStep
+      ? clearFollowUp(state.timing ?? createActionTimingState())
+      : state.timing ?? createActionTimingState(),
+  };
 
-  if (placed.state.status !== 'playing') {
+  if (afterPlacement.match.status !== 'playing') {
     return {
       ok: true,
       consumedTurn: true,
@@ -83,7 +91,7 @@ function resolvePlacementTurn(
     };
   }
 
-  if (preserveForSever && canOpenTriggeredSever(afterPlacement, actor, heroId)) {
+  if (canOpenTriggeredSever(afterPlacement, actor, heroId)) {
     return {
       ok: true,
       consumedTurn: false,
