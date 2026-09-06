@@ -74,11 +74,12 @@ export function evaluatePlacementPattern(board: Board, at: Position, actor: Play
     }
   }
 
+  const rewardedLines = winning ? [] : lines;
   return {
     actor,
     at,
-    lines,
-    reward: lines.reduce((sum, line) => sum + line.reward, 0),
+    lines: rewardedLines,
+    reward: rewardedLines.reduce((sum, line) => sum + line.reward, 0),
     winning,
     adjacentFriendlyCount,
     adjacentEnemy,
