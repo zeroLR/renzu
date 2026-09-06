@@ -3,7 +3,6 @@ import { createBattleController, type BattleController } from '../../app/game-se
 import type { GameSession } from '../../app/game-session/create-game-session';
 import { actionButton, label, surface } from '../../design-system/components/primitives';
 import { color, layout, type } from '../../design-system/tokens/tokens';
-import type { AbilityAction } from '../../game/action/legal-action';
 import { heroes, type AbilityId } from '../../heroes/domain/hero-definition';
 import { boardLineBounds, boardPoint, boardSpacing, type BoardGeometry } from './board-geometry';
 
@@ -31,6 +30,9 @@ function controllerFor(session: GameSession): BattleController {
   return created;
 }
 
+const needsSource = (abilityId: AbilityId): boolean =>
+  abilityId === 'blink' || abilityId === 'charge' || abilityId === 'rally' || abilityId === 'sever';
+
 export function renderBattleScreen(
   root: Container,
   session: GameSession,
@@ -42,6 +44,7 @@ export function renderBattleScreen(
   const interaction = controller.interaction();
   const playerTurn = state.match.status === 'playing' && state.match.phase === 'player';
   const cpuTurn = state.match.status === 'playing' && state.match.phase === 'opponent';
+  const triggeredFollowUp = state.timing?.pendingFollowUp?.actor === 1 && state.timing.pendingFollowUp.kind === 'triggered';
 
   const mode = session.config.mode.kind === 'story' ? `STORY · ${session.config.mode.encounterId}` : 'FREE BATTLE';
   const modeNode = label(mode, type.caption, color.gold, '700');
@@ -49,7 +52,9 @@ export function renderBattleScreen(
   const turnNode = label(
     state.match.status === 'playing'
       ? playerTurn
-        ? `TURN ${state.match.turn} · YOUR MOVE`
+        ? triggeredFollowUp
+          ? `TURN ${state.match.turn} · FOLLOW-UP`
+          : `TURN ${state.match.turn} · YOUR MOVE`
         : `TURN ${state.match.turn} · CPU THINKING`
       : state.match.status.toUpperCase(),
     type.heading,
@@ -141,22 +146,30 @@ export function renderBattleScreen(
   const instruction = label(
     cpuTurn
       ? 'OPPONENT IS CONSIDERING THE BOARD'
-      : interaction.selectedAbilityId
-        ? interaction.selectedSource
-          ? `${interaction.selectedAbilityId.toUpperCase()} · SELECT TARGET`
-          : `${interaction.selectedAbilityId.toUpperCase()} · SELECT ${interaction.selectedAbilityId === 'blink' || interaction.selectedAbilityId === 'sever' ? 'SOURCE' : 'TARGET'}`
-        : 'PLACE A STONE OR USE AN ABILITY',
+      : triggeredFollowUp && !interaction.selectedAbilityId
+        ? 'SEVER AVAILABLE · USE IT OR END TURN'
+        : interaction.selectedAbilityId
+          ? interaction.selectedSource
+            ? `${interaction.selectedAbilityId.toUpperCase()} · SELECT TARGET`
+            : `${interaction.selectedAbilityId.toUpperCase()} · SELECT ${needsSource(interaction.selectedAbilityId) ? 'SOURCE' : 'TARGET'}`
+          : 'PLACE A STONE OR USE AN ABILITY',
     10,
-    cpuTurn || interaction.selectedAbilityId ? color.gold : color.muted,
+    cpuTurn || triggeredFollowUp || interaction.selectedAbilityId ? color.gold : color.muted,
     '700',
   );
   instruction.position.set(43, 592);
   root.addChild(heroNode, instruction);
 
   const legal = controller.legalActions();
-  const legalAbilities = legal.filter((action): action is AbilityAction => action.kind === 'ability');
+  const legalAbilityIds = legal.flatMap((action): AbilityId[] => {
+    if (action.kind === 'ability') return [action.abilityId];
+    if (action.kind === 'follow-up' && action.action.kind === 'ability') return [action.action.abilityId];
+    return [];
+  });
+  const canEndFollowUp = legal.some((action) => action.kind === 'end-follow-up');
+
   hero.defaultLoadout.forEach((abilityId: AbilityId, index: number) => {
-    const ready = playerTurn && legalAbilities.some((action) => action.abilityId === abilityId);
+    const ready = playerTurn && legalAbilityIds.includes(abilityId);
     const selected = interaction.selectedAbilityId === abilityId;
     const cooldown = state.abilities[1].cooldowns[abilityId] ?? 0;
     const title = cooldown > 0 ? `${abilityId.toUpperCase()} · ${cooldown}` : abilityId.toUpperCase();
@@ -177,6 +190,18 @@ export function renderBattleScreen(
     const resource = label(`${resourceId.toUpperCase()}  ${current}${hero.economy.max ? ` / ${hero.economy.max}` : ''}`, type.caption, color.inkSoft, '600');
     resource.position.set(43, 692);
     root.addChild(resource);
+  }
+
+  if (canEndFollowUp) {
+    const end = actionButton('END TURN', 112, 34, () => {
+      controller.endFollowUp();
+      onChange();
+      if (session.state.match.status === 'playing' && session.state.match.phase === 'opponent') {
+        void controller.advanceCpuTurn(onChange);
+      }
+    });
+    end.position.set(235, 682);
+    root.addChild(end);
   }
 
   if (lastAction) {
