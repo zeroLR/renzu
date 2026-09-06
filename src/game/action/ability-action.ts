@@ -78,18 +78,42 @@ function cloneBoard(board: Board): Board {
   return board.map((row) => [...row]);
 }
 
+function samePosition(a: Position, b: Position): boolean {
+  return a.row === b.row && a.col === b.col;
+}
+
 function adjacent(a: Position, b: Position): boolean {
   return Math.max(Math.abs(a.row - b.row), Math.abs(a.col - b.col)) === 1;
 }
 
-function hasAdjacentFriendly(board: Board, at: Position, actor: Player): boolean {
+function adjacentFriendlyPositions(board: Board, at: Position, actor: Player): Position[] {
+  const positions: Position[] = [];
   for (let dr = -1; dr <= 1; dr += 1) {
     for (let dc = -1; dc <= 1; dc += 1) {
       if (dr === 0 && dc === 0) continue;
-      if (board[at.row + dr]?.[at.col + dc] === actor) return true;
+      const candidate = { row: at.row + dr, col: at.col + dc };
+      if (board[candidate.row]?.[candidate.col] === actor) positions.push(candidate);
     }
   }
-  return false;
+  return positions;
+}
+
+function hasAdjacentFriendly(board: Board, at: Position, actor: Player): boolean {
+  return adjacentFriendlyPositions(board, at, actor).length > 0;
+}
+
+function rallySupportCount(board: Board, target: Position, source: Position, actor: Player): number {
+  return adjacentFriendlyPositions(board, target, actor).filter((position) => !samePosition(position, source)).length;
+}
+
+function latticeCells(board: Board, effects: readonly BoardEffect[], target: Position): Position[] {
+  return ([[-1, 0], [1, 0], [0, -1], [0, 1]] as const)
+    .map(([dr, dc]) => ({ row: target.row + dr, col: target.col + dc }))
+    .filter((position) =>
+      isInsideBoard(board, position.row, position.col)
+      && board[position.row][position.col] === 0
+      && !isBlocked(effects, position),
+    );
 }
 
 function resolveBoardMutation(state: AbilityActionState, intent: AbilityIntent): AbilityActionState | null {
@@ -108,6 +132,16 @@ function resolveBoardMutation(state: AbilityActionState, intent: AbilityIntent):
   } else if (abilityId === 'guard') {
     if (board[target.row][target.col] !== actor || isGuarded(effects, target)) return null;
     effects.push(createBoardEffect('guard', target, actor, { kind: 'owner-turns', remaining: 2 }));
+  } else if (abilityId === 'bulwark') {
+    if (board[target.row][target.col] !== actor || isGuarded(effects, target)) return null;
+    const adjacentFriendly = adjacentFriendlyPositions(board, target, actor);
+    if (adjacentFriendly.length === 0) return null;
+    const group = [target, ...adjacentFriendly];
+    for (const position of group) {
+      if (!isGuarded(effects, position)) {
+        effects.push(createBoardEffect('guard', position, actor, { kind: 'owner-turns', remaining: 2 }));
+      }
+    }
   } else if (abilityId === 'seal') {
     if (board[target.row][target.col] !== 0 || isBlocked(effects, target)) return null;
     effects.push(createBoardEffect('seal', target, actor, { kind: 'opponent-turns', remaining: 1 }));
@@ -117,9 +151,8 @@ function resolveBoardMutation(state: AbilityActionState, intent: AbilityIntent):
     effects.push(createBoardEffect('corruption', target, actor, { kind: 'opponent-turns', remaining: 1 }));
   } else if (abilityId === 'charge') {
     if (!source || !isInsideBoard(board, source.row, source.col) || board[source.row][source.col] !== actor || !adjacent(source, target)) return null;
-    if (isGuarded(effects, source)) return null;
+    if (isGuarded(effects, source) || isBlocked(effects, target)) return null;
     if (board[target.row][target.col] === 0) {
-      if (isBlocked(effects, target)) return null;
       board[source.row][source.col] = 0;
       board[target.row][target.col] = actor;
     } else if (board[target.row][target.col] === enemy) {
@@ -135,16 +168,26 @@ function resolveBoardMutation(state: AbilityActionState, intent: AbilityIntent):
   } else if (abilityId === 'phase') {
     if (board[target.row][target.col] !== 0 || isBlocked(effects, target)) return null;
     board[target.row][target.col] = actor;
-    for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]] as const) {
-      const at = { row: target.row + dr, col: target.col + dc };
-      if (isInsideBoard(board, at.row, at.col) && board[at.row][at.col] === 0 && !isBlocked(effects, at)) {
-        effects.push(createBoardEffect('flame', at, actor, { kind: 'opponent-turns', remaining: 1 }));
-      }
+    for (const position of latticeCells(board, effects, target)) {
+      effects.push(createBoardEffect('flame', position, actor, { kind: 'opponent-turns', remaining: 1 }));
+    }
+  } else if (abilityId === 'rally') {
+    if (!source || !isInsideBoard(board, source.row, source.col) || board[source.row][source.col] !== actor || isGuarded(effects, source)) return null;
+    if (board[target.row][target.col] !== 0 || isBlocked(effects, target)) return null;
+    if (rallySupportCount(board, target, source, actor) < 2) return null;
+    board[source.row][source.col] = 0;
+    board[target.row][target.col] = actor;
+  } else if (abilityId === 'lattice') {
+    if (board[target.row][target.col] !== actor || adjacentFriendlyPositions(board, target, actor).length < 2) return null;
+    const cells = latticeCells(board, effects, target);
+    if (cells.length === 0) return null;
+    for (const position of cells) {
+      effects.push(createBoardEffect('seal', position, actor, { kind: 'opponent-turns', remaining: 1 }));
     }
   } else if (abilityId === 'step') {
     return state;
   } else if (abilityId === 'sever') {
-    if (!source || board[source.row]?.[source.col] !== actor || board[target.row][target.col] !== enemy || !adjacent(source, target) || isGuarded(effects, target)) return null;
+    if (!source || !isInsideBoard(board, source.row, source.col) || board[source.row][source.col] !== actor || board[target.row][target.col] !== enemy || !adjacent(source, target) || isGuarded(effects, target)) return null;
     const pushed = { row: target.row + (target.row - source.row), col: target.col + (target.col - source.col) };
     if (!isInsideBoard(board, pushed.row, pushed.col) || board[pushed.row][pushed.col] !== 0 || isBlocked(effects, pushed)) return null;
     board[pushed.row][pushed.col] = enemy;
