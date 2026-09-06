@@ -3,6 +3,10 @@ import { activePlayer, appendAction, completeTurn, endMatch, isBoardFull, type M
 
 export type PlaceActionError = 'match-over' | 'wrong-phase' | 'out-of-bounds' | 'occupied';
 
+export interface PlaceActionOptions {
+  completeTurn?: boolean;
+}
+
 export type PlaceActionResult =
   | {
       ok: true;
@@ -25,7 +29,12 @@ function inBounds(board: Board, at: Position): boolean {
   return isInsideBoard(board, at.row, at.col);
 }
 
-export function resolvePlaceAction(state: MatchState, actor: Player, at: Position): PlaceActionResult {
+export function resolvePlaceAction(
+  state: MatchState,
+  actor: Player,
+  at: Position,
+  options: PlaceActionOptions = {},
+): PlaceActionResult {
   if (state.status !== 'playing') {
     return { ok: false, state, at, consumedTurn: false, error: 'match-over' };
   }
@@ -59,6 +68,6 @@ export function resolvePlaceAction(state: MatchState, actor: Player, at: Positio
     return { ok: true, state: next, actor, at, won: false, draw: true, consumedTurn: true };
   }
 
-  next = completeTurn(next, actor);
+  if (options.completeTurn !== false) next = completeTurn(next, actor);
   return { ok: true, state: next, actor, at, won: false, draw: false, consumedTurn: true };
 }
