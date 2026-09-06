@@ -1,4 +1,4 @@
-import type { Board, Player, Position } from '../../game/board/board';
+import type { PlacementPatternOutcome } from '../../game/rules/placement-pattern';
 import {
   getAbilityCharge,
   getAbilityResource,
@@ -17,36 +17,17 @@ export interface PassiveOutcome {
 }
 
 export interface AfterPlaceContext {
-  board: Board;
-  actor: Player;
-  at: Position;
-  patternReward: number;
+  pattern: PlacementPatternOutcome;
   preserveMomentum?: boolean;
 }
 
-function hasAdjacentEnemy(board: Board, at: Position, actor: Player): boolean {
-  const enemy: Player = actor === 1 ? 2 : 1;
-  for (let dr = -1; dr <= 1; dr += 1) {
-    for (let dc = -1; dc <= 1; dc += 1) {
-      if (dr === 0 && dc === 0) continue;
-      if (board[at.row + dr]?.[at.col + dc] === enemy) return true;
-    }
-  }
-  return false;
-}
-
-function adjacentFriendlyCount(board: Board, at: Position, actor: Player): number {
-  let count = 0;
-  for (let dr = -1; dr <= 1; dr += 1) {
-    for (let dc = -1; dc <= 1; dc += 1) {
-      if (dr === 0 && dc === 0) continue;
-      if (board[at.row + dr]?.[at.col + dc] === actor) count += 1;
-    }
-  }
-  return count;
-}
-
-function gainResource(states: AbilityStates, actor: Player, resourceId: ResourceId, amount: number, max: number): PassiveOutcome {
+function gainResource(
+  states: AbilityStates,
+  actor: 1 | 2,
+  resourceId: ResourceId,
+  amount: number,
+  max: number,
+): PassiveOutcome {
   const before = getAbilityResource(states, actor, resourceId);
   const after = Math.min(max, before + amount);
   if (after === before) return { states, triggered: false };
@@ -62,20 +43,26 @@ export function applyAfterPlacePassive(
   heroId: HeroId,
   context: AfterPlaceContext,
 ): PassiveOutcome {
-  const { actor, at, board, patternReward } = context;
+  const { actor, reward, adjacentFriendlyCount, adjacentEnemy } = context.pattern;
 
   if (heroId === 'vanguard') {
-    return patternReward > 0 ? { states, triggered: true, boardEffect: 'guard' } : { states, triggered: false };
+    return reward > 0 ? { states, triggered: true, boardEffect: 'guard' } : { states, triggered: false };
+  }
+
+  if (heroId === 'arcanist') {
+    return reward > 0
+      ? gainResource(states, actor, 'mana', reward, 5)
+      : { states, triggered: false };
   }
 
   if (heroId === 'shade') {
-    return hasAdjacentEnemy(board, at, actor)
+    return adjacentEnemy
       ? gainResource(states, actor, 'pressure', 1, 3)
       : { states, triggered: false };
   }
 
   if (heroId === 'architect') {
-    const ready = adjacentFriendlyCount(board, at, actor) >= 2;
+    const ready = adjacentFriendlyCount >= 2;
     return {
       states: setAbilityCondition(states, actor, 'formation-ready', ready),
       triggered: ready,
@@ -83,9 +70,13 @@ export function applyAfterPlacePassive(
   }
 
   if (heroId === 'swordmaster') {
-    if (patternReward > 0) {
+    if (reward > 0) {
+      const chargeBefore = getAbilityCharge(states, actor, 'step');
       const charged = setAbilityCharge(states, actor, 'step', 1);
-      return gainResource(charged, actor, 'momentum', patternReward, 3);
+      const momentum = gainResource(charged, actor, 'momentum', reward, 3);
+      return chargeBefore < 1 && !momentum.triggered
+        ? { states: momentum.states, triggered: true }
+        : momentum;
     }
 
     if (context.preserveMomentum && getAbilityCharge(states, actor, 'step') > 0) {
@@ -107,7 +98,7 @@ export function applyAfterPlacePassive(
   return { states, triggered: false };
 }
 
-export function applyAfterAbilityPassive(states: AbilityStates, heroId: HeroId, actor: Player): PassiveOutcome {
+export function applyAfterAbilityPassive(states: AbilityStates, heroId: HeroId, actor: 1 | 2): PassiveOutcome {
   return heroId === 'arcanist'
     ? gainResource(states, actor, 'mana', 1, 5)
     : { states, triggered: false };
