@@ -43,9 +43,11 @@ describe('placement pattern evaluation', () => {
     expect(outcome.lines).toHaveLength(2);
   });
 
-  it('does not grant pattern reward for a winning five', () => {
+  it('suppresses all pattern reward when the placement wins', () => {
     const board = createBoard();
     for (let col = 0; col < 5; col += 1) board[4][col] = 1;
+    board[2][4] = 1;
+    board[3][4] = 1;
 
     const outcome = evaluatePlacementPattern(board, { row: 4, col: 4 }, 1);
 
