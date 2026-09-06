@@ -46,7 +46,7 @@ export const heroes: Record<HeroId, HeroDefinition> = {
   swordmaster: {
     id: 'swordmaster', role: 'offense', passive: 'momentum', economy: { kind: 'momentum', resourceId: 'momentum', max: 3 },
     skillPool: ['blink', 'step', 'sever'], defaultLoadout: ['step', 'sever'],
-    activationOverrides: { blink: { kind: 'resource', resourceId: 'momentum', amount: 2 }, step: { kind: 'condition', conditionId: 'momentum-present' }, sever: { kind: 'resource', resourceId: 'momentum', amount: 3 } },
+    activationOverrides: { blink: { kind: 'resource', resourceId: 'momentum', amount: 2 }, step: { kind: 'charge', amount: 1 }, sever: { kind: 'resource', resourceId: 'momentum', amount: 3 } },
   },
 };
 

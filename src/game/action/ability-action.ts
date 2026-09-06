@@ -10,7 +10,6 @@ import {
 import {
   abilityConsumesTurn,
   beginAbilityTiming,
-  canResolveFollowUp,
   clearFollowUp,
   createActionTimingState,
   type AbilityActionTiming,
@@ -20,6 +19,7 @@ import {
   advanceAbilityEconomyAfterTurn,
   canActivate,
   consumeActivation,
+  setAbilityCondition,
   type AbilityActivationRule,
 } from '../../heroes/economies/ability-economy';
 import type { AbilityStates } from '../../heroes/economies/ability-state';
@@ -64,7 +64,7 @@ const DEFAULT_ACTIVATIONS: Partial<Record<AbilityId, AbilityActivationRule>> = {
   phase: { kind: 'resource', resourceId: 'mana', amount: 3 },
   rally: { kind: 'resource', resourceId: 'mana', amount: 2 },
   lattice: { kind: 'resource', resourceId: 'mana', amount: 3 },
-  step: { kind: 'condition', conditionId: 'momentum-present' },
+  step: { kind: 'charge', amount: 1 },
   sever: { kind: 'resource', resourceId: 'momentum', amount: 3 },
 };
 
@@ -78,18 +78,93 @@ function cloneBoard(board: Board): Board {
   return board.map((row) => [...row]);
 }
 
+function samePosition(a: Position, b: Position): boolean {
+  return a.row === b.row && a.col === b.col;
+}
+
 function adjacent(a: Position, b: Position): boolean {
   return Math.max(Math.abs(a.row - b.row), Math.abs(a.col - b.col)) === 1;
 }
 
-function hasAdjacentFriendly(board: Board, at: Position, actor: Player): boolean {
+function adjacentFriendlyPositions(board: Board, at: Position, actor: Player): Position[] {
+  const positions: Position[] = [];
   for (let dr = -1; dr <= 1; dr += 1) {
     for (let dc = -1; dc <= 1; dc += 1) {
       if (dr === 0 && dc === 0) continue;
-      if (board[at.row + dr]?.[at.col + dc] === actor) return true;
+      const candidate = { row: at.row + dr, col: at.col + dc };
+      if (board[candidate.row]?.[candidate.col] === actor) positions.push(candidate);
     }
   }
-  return false;
+  return positions;
+}
+
+function hasAdjacentFriendly(board: Board, at: Position, actor: Player): boolean {
+  return adjacentFriendlyPositions(board, at, actor).length > 0;
+}
+
+function rallySupportCount(board: Board, target: Position, source: Position, actor: Player): number {
+  return adjacentFriendlyPositions(board, target, actor).filter((position) => !samePosition(position, source)).length;
+}
+
+function latticeCells(board: Board, effects: readonly BoardEffect[], target: Position): Position[] {
+  return ([[-1, 0], [1, 0], [0, -1], [0, 1]] as const)
+    .map(([dr, dc]) => ({ row: target.row + dr, col: target.col + dc }))
+    .filter((position) =>
+      isInsideBoard(board, position.row, position.col)
+      && board[position.row][position.col] === 0
+      && !isBlocked(effects, position),
+    );
+}
+
+function boardPositions(board: Board): Position[] {
+  return board.flatMap((row, rowIndex) => row.map((_, colIndex) => ({ row: rowIndex, col: colIndex })));
+}
+
+function hasFormationAnchor(state: AbilityActionState, actor: Player): boolean {
+  return boardPositions(state.match.board).some((position) =>
+    state.match.board[position.row][position.col] === actor
+    && adjacentFriendlyPositions(state.match.board, position, actor).length >= 2,
+  );
+}
+
+function hasRallyOpportunity(state: AbilityActionState, actor: Player): boolean {
+  const board = state.match.board;
+  const positions = boardPositions(board);
+  return positions.some((source) => {
+    if (board[source.row][source.col] !== actor || isGuarded(state.boardEffects, source)) return false;
+    return positions.some((target) =>
+      board[target.row][target.col] === 0
+      && !isBlocked(state.boardEffects, target)
+      && rallySupportCount(board, target, source, actor) >= 2,
+    );
+  });
+}
+
+function hasLatticeOpportunity(state: AbilityActionState, actor: Player): boolean {
+  const board = state.match.board;
+  return boardPositions(board).some((target) =>
+    board[target.row][target.col] === actor
+    && adjacentFriendlyPositions(board, target, actor).length >= 2
+    && latticeCells(board, state.boardEffects, target).length > 0,
+  );
+}
+
+function prepareConditionalActivation(
+  state: AbilityActionState,
+  intent: AbilityIntent,
+  activation: AbilityActivationRule,
+): AbilityActionState {
+  if (activation.kind !== 'condition' || intent.heroId !== 'architect') return state;
+
+  let ready = false;
+  if (intent.abilityId === 'rally') ready = hasRallyOpportunity(state, intent.actor);
+  else if (intent.abilityId === 'lattice') ready = hasLatticeOpportunity(state, intent.actor);
+  else ready = hasFormationAnchor(state, intent.actor);
+
+  return {
+    ...state,
+    abilities: setAbilityCondition(state.abilities, intent.actor, activation.conditionId, ready),
+  };
 }
 
 function resolveBoardMutation(state: AbilityActionState, intent: AbilityIntent): AbilityActionState | null {
@@ -108,6 +183,16 @@ function resolveBoardMutation(state: AbilityActionState, intent: AbilityIntent):
   } else if (abilityId === 'guard') {
     if (board[target.row][target.col] !== actor || isGuarded(effects, target)) return null;
     effects.push(createBoardEffect('guard', target, actor, { kind: 'owner-turns', remaining: 2 }));
+  } else if (abilityId === 'bulwark') {
+    if (board[target.row][target.col] !== actor || isGuarded(effects, target)) return null;
+    const adjacentFriendly = adjacentFriendlyPositions(board, target, actor);
+    if (adjacentFriendly.length === 0) return null;
+    const group = [target, ...adjacentFriendly];
+    for (const position of group) {
+      if (!isGuarded(effects, position)) {
+        effects.push(createBoardEffect('guard', position, actor, { kind: 'owner-turns', remaining: 2 }));
+      }
+    }
   } else if (abilityId === 'seal') {
     if (board[target.row][target.col] !== 0 || isBlocked(effects, target)) return null;
     effects.push(createBoardEffect('seal', target, actor, { kind: 'opponent-turns', remaining: 1 }));
@@ -117,9 +202,8 @@ function resolveBoardMutation(state: AbilityActionState, intent: AbilityIntent):
     effects.push(createBoardEffect('corruption', target, actor, { kind: 'opponent-turns', remaining: 1 }));
   } else if (abilityId === 'charge') {
     if (!source || !isInsideBoard(board, source.row, source.col) || board[source.row][source.col] !== actor || !adjacent(source, target)) return null;
-    if (isGuarded(effects, source)) return null;
+    if (isGuarded(effects, source) || isBlocked(effects, target)) return null;
     if (board[target.row][target.col] === 0) {
-      if (isBlocked(effects, target)) return null;
       board[source.row][source.col] = 0;
       board[target.row][target.col] = actor;
     } else if (board[target.row][target.col] === enemy) {
@@ -135,16 +219,26 @@ function resolveBoardMutation(state: AbilityActionState, intent: AbilityIntent):
   } else if (abilityId === 'phase') {
     if (board[target.row][target.col] !== 0 || isBlocked(effects, target)) return null;
     board[target.row][target.col] = actor;
-    for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]] as const) {
-      const at = { row: target.row + dr, col: target.col + dc };
-      if (isInsideBoard(board, at.row, at.col) && board[at.row][at.col] === 0 && !isBlocked(effects, at)) {
-        effects.push(createBoardEffect('flame', at, actor, { kind: 'opponent-turns', remaining: 1 }));
-      }
+    for (const position of latticeCells(board, effects, target)) {
+      effects.push(createBoardEffect('flame', position, actor, { kind: 'opponent-turns', remaining: 1 }));
+    }
+  } else if (abilityId === 'rally') {
+    if (!source || !isInsideBoard(board, source.row, source.col) || board[source.row][source.col] !== actor || isGuarded(effects, source)) return null;
+    if (board[target.row][target.col] !== 0 || isBlocked(effects, target)) return null;
+    if (rallySupportCount(board, target, source, actor) < 2) return null;
+    board[source.row][source.col] = 0;
+    board[target.row][target.col] = actor;
+  } else if (abilityId === 'lattice') {
+    if (board[target.row][target.col] !== actor || adjacentFriendlyPositions(board, target, actor).length < 2) return null;
+    const cells = latticeCells(board, effects, target);
+    if (cells.length === 0) return null;
+    for (const position of cells) {
+      effects.push(createBoardEffect('seal', position, actor, { kind: 'opponent-turns', remaining: 1 }));
     }
   } else if (abilityId === 'step') {
     return state;
   } else if (abilityId === 'sever') {
-    if (!source || board[source.row]?.[source.col] !== actor || board[target.row][target.col] !== enemy || !adjacent(source, target) || isGuarded(effects, target)) return null;
+    if (!source || !isInsideBoard(board, source.row, source.col) || board[source.row][source.col] !== actor || board[target.row][target.col] !== enemy || !adjacent(source, target) || isGuarded(effects, target)) return null;
     const pushed = { row: target.row + (target.row - source.row), col: target.col + (target.col - source.col) };
     if (!isInsideBoard(board, pushed.row, pushed.col) || board[pushed.row][pushed.col] !== 0 || isBlocked(effects, pushed)) return null;
     board[pushed.row][pushed.col] = enemy;
@@ -163,37 +257,54 @@ export function resolveAbilityAction(state: AbilityActionState, intent: AbilityI
 
   const timing = actionTiming(intent.abilityId);
   const timingState = state.timing ?? createActionTimingState();
-  if (intent.followUp && !canResolveFollowUp(timingState, intent.actor)) {
-    return { ok: false, state, consumedTurn: false, error: 'follow-up-unavailable' };
+  const pending = timingState.pendingFollowUp;
+  if (timing === 'triggered-follow-up') {
+    if (!pending || pending.actor !== intent.actor || pending.abilityId !== intent.abilityId || pending.kind !== 'triggered') {
+      return { ok: false, state, consumedTurn: false, error: 'follow-up-unavailable' };
+    }
+  }
+  if (intent.followUp) {
+    if (!pending || pending.actor !== intent.actor || pending.abilityId !== intent.abilityId) {
+      return { ok: false, state, consumedTurn: false, error: 'follow-up-unavailable' };
+    }
   }
 
   const activation = heroes[intent.heroId].activationOverrides[intent.abilityId] ?? DEFAULT_ACTIVATIONS[intent.abilityId];
-  if (!activation || !canActivate(state.abilities, intent.actor, activation, intent.abilityId).ready) {
+  if (!activation) return { ok: false, state, consumedTurn: false, error: 'activation-unavailable' };
+
+  const prepared = prepareConditionalActivation({ ...state, timing: timingState }, intent, activation);
+  if (!canActivate(prepared.abilities, intent.actor, activation, intent.abilityId).ready) {
     return { ok: false, state, consumedTurn: false, error: 'activation-unavailable' };
   }
 
-  const mutated = resolveBoardMutation({ ...state, timing: timingState }, intent);
+  const mutated = resolveBoardMutation(prepared, intent);
   if (!mutated) return { ok: false, state, consumedTurn: false, error: 'invalid-target' };
 
   const consumedTurn = abilityConsumesTurn(timing);
   const advancedAbilities = consumedTurn
     ? advanceAbilityEconomyAfterTurn(mutated.abilities, intent.actor)
     : mutated.abilities;
-  const consumedAbilities = consumeActivation(advancedAbilities, intent.actor, activation, intent.abilityId);
+  const consumedAbilities = intent.abilityId === 'step'
+    ? advancedAbilities
+    : consumeActivation(advancedAbilities, intent.actor, activation, intent.abilityId);
   const passive = applyAfterAbilityPassive(consumedAbilities, intent.heroId, intent.actor);
-  let match = appendAction(mutated.match, {
-    actor: intent.actor,
-    kind: 'ability',
-    at: intent.target,
-    source: intent.source,
-    abilityId: intent.abilityId,
-  });
+  let match = intent.abilityId === 'step'
+    ? mutated.match
+    : appendAction(mutated.match, {
+      actor: intent.actor,
+      kind: 'ability',
+      at: intent.target,
+      source: intent.source,
+      abilityId: intent.abilityId,
+    });
 
-  const boardChangedAtTarget = match.board[intent.target.row]?.[intent.target.col] === intent.actor;
-  if (boardChangedAtTarget && isWinningMove(match.board, intent.target, intent.actor)) {
-    match = endMatch(match, intent.actor === 1 ? 'victory' : 'defeat');
-  } else if (isBoardFull(match)) {
-    match = endMatch(match, 'draw');
+  if (intent.abilityId !== 'step') {
+    const boardChangedAtTarget = match.board[intent.target.row]?.[intent.target.col] === intent.actor;
+    if (boardChangedAtTarget && isWinningMove(match.board, intent.target, intent.actor)) {
+      match = endMatch(match, intent.actor === 1 ? 'victory' : 'defeat');
+    } else if (isBoardFull(match)) {
+      match = endMatch(match, 'draw');
+    }
   }
 
   let nextTiming = intent.followUp ? clearFollowUp(timingState) : beginAbilityTiming(timingState, intent.actor, intent.abilityId, timing);

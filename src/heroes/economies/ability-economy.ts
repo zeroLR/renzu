@@ -23,12 +23,14 @@ export type AbilityActivationRule =
   | { kind: 'cooldown'; turns: number }
   | { kind: 'condition'; conditionId: AbilityConditionId }
   | { kind: 'resource-and-condition'; resourceId: ResourceId; amount: number; conditionId: AbilityConditionId }
+  | { kind: 'charge'; amount: number }
   | { kind: 'limited-use'; uses: number };
 
 export type ActivationFailureReason =
   | 'insufficient-resource'
   | 'cooldown'
   | 'condition'
+  | 'charge'
   | 'limited-use'
   | 'missing-ability-id';
 
@@ -76,6 +78,10 @@ export function getAbilityCharge(states: AbilityStates, player: Player, abilityI
   return states[player].charges[abilityId] ?? 0;
 }
 
+export function setAbilityCharge(states: AbilityStates, player: Player, abilityId: AbilityId, value: number): AbilityStates {
+  return updateAbilityMap(states, player, 'charges', abilityId, value);
+}
+
 export function getAbilityUsesSpent(states: AbilityStates, player: Player, abilityId: AbilityId): number {
   return states[player].usesSpent[abilityId] ?? 0;
 }
@@ -115,6 +121,12 @@ export function canActivate(
       : { ready: false, reason: 'cooldown' };
   }
 
+  if (activation.kind === 'charge') {
+    return getAbilityCharge(states, player, abilityId) >= activation.amount
+      ? { ready: true }
+      : { ready: false, reason: 'charge' };
+  }
+
   return getAbilityUsesSpent(states, player, abilityId) < activation.uses
     ? { ready: true }
     : { ready: false, reason: 'limited-use' };
@@ -139,6 +151,10 @@ export function consumeActivation(
 
   if (activation.kind === 'cooldown' && abilityId) {
     return updateAbilityMap(states, player, 'cooldowns', abilityId, activation.turns);
+  }
+
+  if (activation.kind === 'charge' && abilityId) {
+    return setAbilityCharge(states, player, abilityId, getAbilityCharge(states, player, abilityId) - activation.amount);
   }
 
   if (activation.kind === 'limited-use' && abilityId) {

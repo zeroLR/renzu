@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createMatchState } from '../src/game/match/match-state';
 import { createAbilityStates } from '../src/heroes/economies/ability-state';
-import { setAbilityCondition } from '../src/heroes/economies/ability-economy';
+import { setAbilityCharge } from '../src/heroes/economies/ability-economy';
 import { createBoardEffect } from '../src/game/combat/board-effects';
 import { resolveAbilityAction, type AbilityActionState } from '../src/game/action/ability-action';
 import { listLegalActions, listLegalPlaceActions } from '../src/game/action/legal-action';
@@ -32,7 +32,7 @@ describe('legal action model', () => {
     expect(state.match.board[4][4]).toBe(0);
   });
 
-  it('does not expose unsupported hero abilities as legal actions', () => {
+  it('does not expose Architect abilities when the live board has no legal formation opportunity', () => {
     const actions = listLegalActions(createState(), 'architect', 1);
     const abilityIds = actions
       .filter((action) => action.kind === 'ability')
@@ -44,7 +44,7 @@ describe('legal action model', () => {
 
   it('exposes precommit placement as follow-up after Swordmaster Step', () => {
     let state = createState();
-    state = { ...state, abilities: setAbilityCondition(state.abilities, 1, 'momentum-present', true) };
+    state = { ...state, abilities: setAbilityCharge(state.abilities, 1, 'step', 1) };
     const armed = resolveAbilityAction(state, {
       heroId: 'swordmaster',
       abilityId: 'step',
@@ -61,9 +61,9 @@ describe('legal action model', () => {
     expect(actions[0]).toMatchObject({ kind: 'follow-up', actor: 1, sourceAbilityId: 'step' });
   });
 
-  it('resolves a precommit placement follow-up, clears timing, and hands off the turn', () => {
+  it('resolves a precommit placement follow-up, consumes Step charge, and hands off the turn', () => {
     let state = createState();
-    state = { ...state, abilities: setAbilityCondition(state.abilities, 1, 'momentum-present', true) };
+    state = { ...state, abilities: setAbilityCharge(state.abilities, 1, 'step', 1) };
     const armed = resolveAbilityAction(state, {
       heroId: 'swordmaster',
       abilityId: 'step',
@@ -72,6 +72,7 @@ describe('legal action model', () => {
     });
     expect(armed.ok).toBe(true);
     if (!armed.ok) return;
+    expect(armed.state.abilities[1].charges.step).toBe(1);
 
     const action = listLegalActions(armed.state, 'swordmaster', 1)[0];
     const result = resolveSessionAction(armed.state, action, 'swordmaster');
@@ -79,6 +80,8 @@ describe('legal action model', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.state.match.board[0][0]).toBe(1);
+    expect(result.state.abilities[1].charges.step).toBe(0);
+    expect(result.state.match.actionHistory.at(-1)).toMatchObject({ kind: 'ability', abilityId: 'step', at: { row: 0, col: 0 } });
     expect(result.state.match.phase).toBe('opponent');
     expect(result.state.timing?.pendingFollowUp).toBeNull();
   });
