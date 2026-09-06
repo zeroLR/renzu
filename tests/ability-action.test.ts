@@ -101,7 +101,7 @@ describe('ability action resolution', () => {
     expect(result.state.boardEffects.filter((effect) => effect.kind === 'seal')).toHaveLength(0);
   });
 
-  it('arms Swordmaster Step from one earned charge without consuming the turn', () => {
+  it('arms Swordmaster Step from one earned charge without consuming the turn or charge yet', () => {
     let state = createState();
     state = { ...state, abilities: setAbilityCharge(state.abilities, 1, 'step', 1) };
 
@@ -111,7 +111,8 @@ describe('ability action resolution', () => {
     if (!result.ok) return;
     expect(result.consumedTurn).toBe(false);
     expect(result.timing).toBe('precommit-follow-up');
-    expect(result.state.abilities[1].charges.step).toBe(0);
+    expect(result.state.abilities[1].charges.step).toBe(1);
+    expect(result.state.match.actionHistory).toHaveLength(0);
     expect(result.state.timing?.pendingFollowUp).toEqual({ actor: 1, abilityId: 'step', kind: 'precommit' });
     expect(result.state.match.phase).toBe('player');
     expect(result.state.match.turn).toBe(1);
