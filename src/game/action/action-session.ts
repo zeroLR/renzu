@@ -48,6 +48,15 @@ function resolvePlacementTurn(
   const placed = resolvePlaceAction(state.match, actor, at, { completeTurn: false });
   if (!placed.ok) return { ok: false, state, consumedTurn: false, error: placed.error };
 
+  const beforePassive: AbilityActionState = {
+    ...state,
+    match: placed.state,
+    timing: precommittedStep
+      ? clearFollowUp(state.timing ?? createActionTimingState())
+      : state.timing ?? createActionTimingState(),
+  };
+  const preserveForSever = canOpenTriggeredSever(beforePassive, actor, heroId);
+
   let abilities = state.abilities;
   if (heroId) {
     abilities = applyAfterPlacePassive(abilities, heroId, {
@@ -55,18 +64,11 @@ function resolvePlacementTurn(
       actor,
       at,
       patternReward: 0,
-      preserveMomentum: precommittedStep,
+      preserveMomentum: precommittedStep || preserveForSever,
     }).states;
   }
 
-  const afterPlacement: AbilityActionState = {
-    ...state,
-    match: placed.state,
-    abilities,
-    timing: precommittedStep
-      ? clearFollowUp(state.timing ?? createActionTimingState())
-      : state.timing ?? createActionTimingState(),
-  };
+  const afterPlacement: AbilityActionState = { ...beforePassive, abilities };
 
   if (placed.state.status !== 'playing') {
     return {
@@ -81,7 +83,7 @@ function resolvePlacementTurn(
     };
   }
 
-  if (canOpenTriggeredSever(afterPlacement, actor, heroId)) {
+  if (preserveForSever && canOpenTriggeredSever(afterPlacement, actor, heroId)) {
     return {
       ok: true,
       consumedTurn: false,
