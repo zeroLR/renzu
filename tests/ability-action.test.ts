@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createMatchState } from '../src/game/match/match-state';
 import { createAbilityStates } from '../src/heroes/economies/ability-state';
-import { setAbilityCondition, setAbilityResource } from '../src/heroes/economies/ability-economy';
+import { setAbilityCharge, setAbilityResource } from '../src/heroes/economies/ability-economy';
 import { resolveAbilityAction, type AbilityActionState } from '../src/game/action/ability-action';
 
 function createState(): AbilityActionState {
@@ -101,9 +101,9 @@ describe('ability action resolution', () => {
     expect(result.state.boardEffects.filter((effect) => effect.kind === 'seal')).toHaveLength(0);
   });
 
-  it('arms Swordmaster Step as a precommit follow-up without consuming the turn', () => {
+  it('arms Swordmaster Step from one earned charge without consuming the turn', () => {
     let state = createState();
-    state = { ...state, abilities: setAbilityCondition(state.abilities, 1, 'momentum-present', true) };
+    state = { ...state, abilities: setAbilityCharge(state.abilities, 1, 'step', 1) };
 
     const result = resolveAbilityAction(state, { heroId: 'swordmaster', abilityId: 'step', actor: 1, target: { row: 0, col: 0 } });
 
@@ -111,6 +111,7 @@ describe('ability action resolution', () => {
     if (!result.ok) return;
     expect(result.consumedTurn).toBe(false);
     expect(result.timing).toBe('precommit-follow-up');
+    expect(result.state.abilities[1].charges.step).toBe(0);
     expect(result.state.timing?.pendingFollowUp).toEqual({ actor: 1, abilityId: 'step', kind: 'precommit' });
     expect(result.state.match.phase).toBe('player');
     expect(result.state.match.turn).toBe(1);
