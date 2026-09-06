@@ -1,5 +1,11 @@
 import type { Board, Player, Position } from '../../game/board/board';
-import { getAbilityResource, setAbilityCondition, setAbilityResource } from '../economies/ability-economy';
+import {
+  getAbilityCharge,
+  getAbilityResource,
+  setAbilityCharge,
+  setAbilityCondition,
+  setAbilityResource,
+} from '../economies/ability-economy';
 import type { AbilityStates, ResourceId } from '../economies/ability-state';
 import type { HeroId } from './hero-definition';
 
@@ -77,8 +83,18 @@ export function applyAfterPlacePassive(
   }
 
   if (heroId === 'swordmaster') {
-    if (patternReward > 0) return gainResource(states, actor, 'momentum', patternReward, 3);
-    if (context.preserveMomentum) return { states, triggered: false };
+    if (patternReward > 0) {
+      const charged = setAbilityCharge(states, actor, 'step', 1);
+      return gainResource(charged, actor, 'momentum', patternReward, 3);
+    }
+
+    if (context.preserveMomentum && getAbilityCharge(states, actor, 'step') > 0) {
+      return {
+        states: setAbilityCharge(states, actor, 'step', 0),
+        triggered: false,
+      };
+    }
+
     const before = getAbilityResource(states, actor, 'momentum');
     if (before <= 0) return { states, triggered: false };
     return {
