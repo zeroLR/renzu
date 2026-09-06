@@ -24,12 +24,19 @@ export interface BattleController {
   legalActions(): LegalAction[];
   selectAbility(abilityId: AbilityId): void;
   tapCell(at: Position): void;
+  endFollowUp(): void;
   advanceCpuTurn(onStep?: () => void, options?: CpuChoreographyOptions): Promise<void>;
   clearSelection(): void;
 }
 
 const samePosition = (a: Position | undefined, b: Position): boolean => !!a && a.row === b.row && a.col === b.col;
 const defaultDelay = (ms: number): Promise<void> => new Promise((resolve) => globalThis.setTimeout(resolve, ms));
+
+function abilityFrom(action: LegalAction): AbilityAction | null {
+  if (action.kind === 'ability') return action;
+  if (action.kind === 'follow-up' && action.action.kind === 'ability') return action.action;
+  return null;
+}
 
 export function createBattleController(session: GameSession, random?: () => number): BattleController {
   let selectedAbilityId: AbilityId | null = null;
@@ -93,9 +100,7 @@ export function createBattleController(session: GameSession, random?: () => numb
   };
 
   const selectAbility = (abilityId: AbilityId): void => {
-    const candidates = legalActions().filter(
-      (action): action is AbilityAction => action.kind === 'ability' && action.abilityId === abilityId,
-    );
+    const candidates = legalActions().filter((action) => abilityFrom(action)?.abilityId === abilityId);
     if (candidates.length === 0) {
       lastError = 'ability-unavailable';
       return;
@@ -122,13 +127,11 @@ export function createBattleController(session: GameSession, random?: () => numb
       return;
     }
 
-    const candidates = actions.filter(
-      (action): action is AbilityAction => action.kind === 'ability' && action.abilityId === selectedAbilityId,
-    );
-    const needsSource = candidates.some((action) => action.source !== undefined);
+    const candidates = actions.filter((action) => abilityFrom(action)?.abilityId === selectedAbilityId);
+    const needsSource = candidates.some((action) => abilityFrom(action)?.source !== undefined);
 
     if (needsSource && !selectedSource) {
-      if (candidates.some((action) => samePosition(action.source, at))) {
+      if (candidates.some((action) => samePosition(abilityFrom(action)?.source, at))) {
         selectedSource = at;
         lastError = null;
       } else {
@@ -137,9 +140,12 @@ export function createBattleController(session: GameSession, random?: () => numb
       return;
     }
 
-    const match = candidates.find(
-      (action) => samePosition(action.target, at) && (!needsSource || samePosition(action.source, selectedSource!)),
-    );
+    const match = candidates.find((action) => {
+      const ability = abilityFrom(action);
+      return ability
+        ? samePosition(ability.target, at) && (!needsSource || samePosition(ability.source, selectedSource!))
+        : false;
+    });
     if (match) apply(match);
     else lastError = 'invalid-target';
   };
@@ -150,6 +156,11 @@ export function createBattleController(session: GameSession, random?: () => numb
     legalActions,
     selectAbility,
     tapCell,
+    endFollowUp() {
+      const end = legalActions().find((action) => action.kind === 'end-follow-up');
+      if (end) apply(end);
+      else lastError = 'follow-up-unavailable';
+    },
     advanceCpuTurn,
     clearSelection() {
       selectedAbilityId = null;
