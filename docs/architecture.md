@@ -40,6 +40,32 @@ src/
 5. `platform/` owns storage, analytics, environment, and other browser/service integration.
 6. `app/` composes modules and owns bootstrap/navigation orchestration.
 
+## Placement pattern / passive contract
+
+Meaningful placement outcomes are evaluated once through `game/rules` and then consumed by hero passives. Hero implementations must not independently rescan the board for the same placement facts.
+
+```text
+Place Action
+  ↓
+evaluatePlacementPattern
+  ↓
+PlacementPatternOutcome
+  ├─ qualifying 3/4 lines + reward
+  ├─ winning-line flag
+  ├─ adjacent-friendly count
+  └─ adjacent-enemy flag
+  ↓
+Hero Passive Engine
+  ↓
+PassiveOutcome
+  ↓
+Session materializes economy / board effects / follow-up timing
+```
+
+The v1 pattern reward follows the validated prototype rule: only lines crossing the newly placed stone qualify; an exact three contributes 1, an exact four contributes 2, qualifying directions accumulate, and a winning five does not grant an additional pattern reward.
+
+This boundary is shared by player and CPU session resolution so passive behavior remains deterministic regardless of presentation or controller path.
+
 ## Migration policy
 
 The legacy `gomoku-rpg` implementation is a behavior reference, not a target folder structure. Migration happens incrementally:
