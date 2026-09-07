@@ -66,6 +66,34 @@ The v1 pattern reward follows the validated prototype rule: only lines crossing 
 
 This boundary is shared by player and CPU session resolution so passive behavior remains deterministic regardless of presentation or controller path.
 
+## AI tactical evaluation contract
+
+AI must not implement a second copy of ability-resolution rules. Candidate actions come from the shared legal-action surface and tactical ability evaluation resolves one candidate against a cloned gameplay state through the same session resolver used by runtime play.
+
+```text
+AbilityActionState
+  ↓
+listLegalActions
+  ↓
+AI candidate
+  ↓
+clone state
+  ↓
+resolveSessionAction
+  ↓
+Tactical outcome
+  ├─ immediate win
+  ├─ enemy immediate threats before / after
+  ├─ own line topology change
+  ├─ enemy line reduction
+  ├─ enemy stones removed
+  └─ denial effects created
+  ↓
+Difficulty-weighted ranking
+```
+
+R2/v1 intentionally keeps this to one-action simulation. Difficulty changes candidate selection variance and weighting, not gameplay legality or resolver behavior. Deeper search is a later optimization only if playtesting demonstrates that one-action tactical awareness is insufficient.
+
 ## Migration policy
 
 The legacy `gomoku-rpg` implementation is a behavior reference, not a target folder structure. Migration happens incrementally:
