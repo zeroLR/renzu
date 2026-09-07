@@ -56,8 +56,9 @@ describe('battle interaction controller', () => {
     const targetStep = controller.targeting();
     expect(targetStep).toMatchObject({ abilityId: 'charge', phase: 'select-target' });
     expect(targetStep.sources).toEqual([{ row: 4, col: 4 }]);
-    expect(targetStep.targets).toHaveLength(4);
+    expect(targetStep.targets).toHaveLength(8);
     expect(targetStep.targets).toContainEqual({ row: 4, col: 5 });
+    expect(targetStep.targets).toContainEqual({ row: 3, col: 3 });
   });
 
   it('projects targets directly for an ability without a source-selection step', () => {
