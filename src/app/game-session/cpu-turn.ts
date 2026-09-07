@@ -33,9 +33,10 @@ export function resolveCpuTurn(state: AbilityActionState, config: CpuTurnConfig)
   const actor = 2 as const;
   const actions = listLegalActions(state, config.heroId, actor);
   const decision = chooseAction(
-    state.match.board,
+    state,
     actions,
     actor,
+    config.heroId,
     aiDifficulty(config.difficulty),
     config.random,
   );
