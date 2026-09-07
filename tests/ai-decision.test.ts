@@ -29,17 +29,17 @@ describe('AI decision and evaluation', () => {
     expect(decision?.regret).toBe(0);
   });
 
-  it('always blocks an immediate player win even on Easy', () => {
+  it('always blocks a single immediate player win even on Easy', () => {
     const state = createState();
+    state.match.board[3][0] = 1;
     state.match.board[3][1] = 1;
     state.match.board[3][2] = 1;
     state.match.board[3][3] = 1;
-    state.match.board[3][4] = 1;
     const actions = listLegalActions(state, 'vanguard', 2);
 
     const decision = chooseAction(state, actions, 2, 'vanguard', aiDifficulty('easy'), () => 0.99);
 
-    expect(decision?.action).toMatchObject({ kind: 'place', at: { row: 3, col: 0 } });
+    expect(decision?.action).toMatchObject({ kind: 'place', at: { row: 3, col: 4 } });
     expect(decision?.decisionReason).toBe('FORCED_TACTICAL');
   });
 
