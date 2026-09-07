@@ -4,6 +4,7 @@ import type { GameSession } from '../../app/game-session/create-game-session';
 import { actionButton, label, surface } from '../../design-system/components/primitives';
 import { color, layout, type } from '../../design-system/tokens/tokens';
 import { heroes, type AbilityId } from '../../heroes/domain/hero-definition';
+import { abilityHelpText } from '../hud/ability-copy';
 import { boardLineBounds, boardPoint, boardSpacing, type BoardGeometry } from './board-geometry';
 
 const controllers = new WeakMap<GameSession, BattleController>();
@@ -30,9 +31,6 @@ function controllerFor(session: GameSession): BattleController {
   return created;
 }
 
-const needsSource = (abilityId: AbilityId): boolean =>
-  abilityId === 'blink' || abilityId === 'charge' || abilityId === 'rally' || abilityId === 'sever';
-
 export function renderBattleScreen(
   root: Container,
   session: GameSession,
@@ -42,6 +40,7 @@ export function renderBattleScreen(
   const controller = controllerFor(session);
   const state = session.state;
   const interaction = controller.interaction();
+  const targeting = controller.targeting();
   const playerTurn = state.match.status === 'playing' && state.match.phase === 'player';
   const cpuTurn = state.match.status === 'playing' && state.match.phase === 'opponent';
   const pendingFollowUp = state.timing?.pendingFollowUp;
@@ -113,10 +112,35 @@ export function renderBattleScreen(
     });
   });
 
+  if (targeting.phase === 'select-source') {
+    targeting.sources.forEach((at) => {
+      const point = boardPoint(BOARD, at);
+      const marker = new Graphics().circle(point.x, point.y, 16).stroke({ color: color.violet, width: 2 });
+      marker.alpha = 0.9;
+      marker.eventMode = 'none';
+      root.addChild(marker);
+    });
+  }
+
+  if (targeting.phase === 'select-target') {
+    targeting.targets.forEach((at) => {
+      const point = boardPoint(BOARD, at);
+      const marker = new Graphics()
+        .circle(point.x, point.y, 8)
+        .stroke({ color: color.gold, width: 1 })
+        .circle(point.x, point.y, 2)
+        .fill(color.gold);
+      marker.alpha = 0.72;
+      marker.eventMode = 'none';
+      root.addChild(marker);
+    });
+  }
+
   const lastAction = state.match.actionHistory[state.match.actionHistory.length - 1];
   if (lastAction) {
     const point = boardPoint(BOARD, lastAction.at);
     const marker = new Graphics().circle(point.x, point.y, 4).fill(lastAction.actor === 1 ? color.gold : color.inkSoft);
+    marker.eventMode = 'none';
     root.addChild(marker);
   }
 
@@ -126,12 +150,19 @@ export function renderBattleScreen(
       .circle(point.x, point.y, 15)
       .stroke({ color: effect.kind === 'guard' ? color.gold : color.danger, width: 2 });
     marker.alpha = 0.8;
+    marker.eventMode = 'none';
     root.addChild(marker);
   });
 
   if (interaction.selectedSource) {
     const point = boardPoint(BOARD, interaction.selectedSource);
-    root.addChild(new Graphics().circle(point.x, point.y, 17).stroke({ color: color.gold, width: 2 }));
+    const selected = new Graphics()
+      .circle(point.x, point.y, 18)
+      .stroke({ color: color.gold, width: 2 })
+      .circle(point.x, point.y, 14)
+      .stroke({ color: color.violet, width: 1 });
+    selected.eventMode = 'none';
+    root.addChild(selected);
   }
 
   if (cpuTurn) {
@@ -140,7 +171,7 @@ export function renderBattleScreen(
     root.addChild(pulse);
   }
 
-  const hud = surface(layout.contentWidth, 206, true);
+  const hud = surface(layout.contentWidth, 222, true);
   hud.position.set(layout.horizontalInset, 550);
   root.addChild(hud);
 
@@ -155,9 +186,7 @@ export function renderBattleScreen(
         : precommitFollowUp
           ? 'STEP ARMED · PLACE A STONE'
           : interaction.selectedAbilityId
-            ? interaction.selectedSource
-              ? `${interaction.selectedAbilityId.toUpperCase()} · SELECT TARGET`
-              : `${interaction.selectedAbilityId.toUpperCase()} · SELECT ${needsSource(interaction.selectedAbilityId) ? 'SOURCE' : 'TARGET'}`
+            ? `${interaction.selectedAbilityId.toUpperCase()} · ${targeting.phase === 'select-source' ? 'SELECT SOURCE' : 'SELECT TARGET'}`
             : 'PLACE A STONE OR USE AN ABILITY',
     10,
     cpuTurn || precommitFollowUp || triggeredFollowUp || interaction.selectedAbilityId ? color.gold : color.muted,
@@ -184,17 +213,25 @@ export function renderBattleScreen(
       if (selected) controller.clearSelection();
       else controller.selectAbility(abilityId);
       onChange();
-    }, selected || ready);
+    }, selected);
     button.position.set(43 + index * 158, 622);
     if (!ready && !selected) button.alpha = 0.35;
     root.addChild(button);
   });
 
+  const contextualAbilityId = interaction.selectedAbilityId
+    ?? (precommitFollowUp ? 'step' : triggeredFollowUp ? 'sever' : null);
+  if (contextualAbilityId) {
+    const help = label(abilityHelpText(contextualAbilityId), 9, color.inkSoft, '500');
+    help.position.set(43, 683);
+    root.addChild(help);
+  }
+
   const resourceId = hero.economy.resourceId;
   if (resourceId) {
     const current = state.abilities[1].resources[resourceId];
     const resource = label(`${resourceId.toUpperCase()}  ${current}${hero.economy.max ? ` / ${hero.economy.max}` : ''}`, type.caption, color.inkSoft, '600');
-    resource.position.set(43, 692);
+    resource.position.set(43, 706);
     root.addChild(resource);
   }
 
@@ -206,7 +243,7 @@ export function renderBattleScreen(
         void controller.advanceCpuTurn(onChange);
       }
     });
-    end.position.set(235, 682);
+    end.position.set(235, 700);
     root.addChild(end);
   }
 
@@ -215,13 +252,13 @@ export function renderBattleScreen(
       ? `LAST · ${lastAction.actor === 1 ? 'YOU' : 'CPU'} · ${lastAction.abilityId.toUpperCase()}`
       : `LAST · ${lastAction.actor === 1 ? 'YOU' : 'CPU'} · PLACE`;
     const recent = label(actionText, 10, color.muted, '600');
-    recent.position.set(43, 716);
+    recent.position.set(43, 740);
     root.addChild(recent);
   }
 
   if (interaction.lastError) {
     const error = label(interaction.lastError.replaceAll('-', ' ').toUpperCase(), 10, color.danger, '700');
-    error.position.set(190, 716);
+    error.position.set(190, 740);
     root.addChild(error);
   }
 

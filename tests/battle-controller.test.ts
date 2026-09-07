@@ -41,6 +41,43 @@ describe('battle interaction controller', () => {
     expect(abilities.every((action) => action.actor === 1)).toBe(true);
   });
 
+  it('projects legal sources first, then targets for a source-target ability', () => {
+    const game = session();
+    game.state.match.board[4][4] = 1;
+    const controller = createBattleController(game, () => 0);
+
+    controller.selectAbility('charge');
+    const sourceStep = controller.targeting();
+    expect(sourceStep).toMatchObject({ abilityId: 'charge', phase: 'select-source' });
+    expect(sourceStep.sources).toEqual([{ row: 4, col: 4 }]);
+    expect(sourceStep.targets).toEqual([]);
+
+    controller.tapCell({ row: 4, col: 4 });
+    const targetStep = controller.targeting();
+    expect(targetStep).toMatchObject({ abilityId: 'charge', phase: 'select-target' });
+    expect(targetStep.sources).toEqual([{ row: 4, col: 4 }]);
+    expect(targetStep.targets).toHaveLength(8);
+    expect(targetStep.targets).toContainEqual({ row: 4, col: 5 });
+    expect(targetStep.targets).toContainEqual({ row: 3, col: 3 });
+  });
+
+  it('projects targets directly for an ability without a source-selection step', () => {
+    const game = session();
+    game.state.match.board[4][4] = 1;
+    const controller = createBattleController(game, () => 0);
+
+    controller.selectAbility('guard');
+    expect(controller.targeting()).toEqual({
+      abilityId: 'guard',
+      phase: 'select-target',
+      sources: [],
+      targets: [{ row: 4, col: 4 }],
+    });
+
+    controller.clearSelection();
+    expect(controller.targeting()).toEqual({ abilityId: null, phase: 'idle', sources: [], targets: [] });
+  });
+
   it('reports an unavailable ability without mutating the match', () => {
     const game = session();
     const controller = createBattleController(game, () => 0);

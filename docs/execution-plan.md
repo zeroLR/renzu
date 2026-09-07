@@ -211,6 +211,35 @@ Complete:
 
 ---
 
+## R2.2.5 — Combat targeting readability
+
+**Goal:** make ability interaction understandable from the board state without trial-and-error tapping before deeper AI work multiplies combat test cases.
+
+Presentation must project the shared legal-action surface rather than duplicate hero targeting rules.
+
+Required interaction states:
+
+```text
+Select Ability
+→ legal source markers when a source is required
+→ selected-source confirmation
+→ legal target markers for that source
+→ resolve / cancel
+```
+
+Also provide:
+
+- a clearly distinct selected ability state;
+- concise `SELECT SOURCE` / `SELECT TARGET` guidance;
+- contextual copy for the selected ability;
+- existing Step / Sever follow-up guidance without adding animation or VFX requirements.
+
+Keep markers restrained so target hints remain distinguishable from last-move and board-effect markers.
+
+**Exit:** after selecting a v1 ability, the player can identify the next legal interaction from visible board/HUD feedback without learning targeting through invalid-action errors.
+
+---
+
 ## R2.3 — Ability-aware AI evaluation
 
 Extend AI evaluation from generic ability opportunity to simulated tactical outcome where necessary.
