@@ -14,6 +14,7 @@ import {
   setAbilityResource,
 } from '../src/heroes/economies/ability-economy';
 import { createAbilityStates } from '../src/heroes/economies/ability-state';
+import type { HeroId } from '../src/heroes/domain/hero-definition';
 
 function state(): AbilityActionState {
   return {
@@ -24,7 +25,7 @@ function state(): AbilityActionState {
   };
 }
 
-function freeBattle(playerHeroId: 'vanguard' | 'arcanist' | 'shade' | 'architect' | 'swordmaster', cpuHeroId = 'vanguard' as const) {
+function freeBattle(playerHeroId: HeroId, cpuHeroId: HeroId = 'vanguard') {
   return createGameSession({
     mode: { kind: 'free-battle' },
     playerHeroId,
