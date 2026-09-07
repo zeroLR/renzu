@@ -11,7 +11,8 @@
     "verify:staging": "node scripts/verify-pages-build.mjs staging",
     "verify:production": "node scripts/verify-pages-build.mjs production",
     "preview": "vite preview --host 0.0.0.0",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:combat-gate": "vitest run tests/combat-characterization-gate.test.ts"
   },
   "dependencies": {
     "pixi.js": "^8.6.6"
