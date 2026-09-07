@@ -12,6 +12,15 @@ export interface BattleInteractionState {
   cpuThinking: boolean;
 }
 
+export type BattleTargetingPhase = 'idle' | 'select-source' | 'select-target';
+
+export interface BattleTargetingState {
+  abilityId: AbilityId | null;
+  phase: BattleTargetingPhase;
+  sources: readonly Position[];
+  targets: readonly Position[];
+}
+
 export interface CpuChoreographyOptions {
   thinkDelayMs?: number;
   followUpDelayMs?: number;
@@ -21,6 +30,7 @@ export interface CpuChoreographyOptions {
 export interface BattleController {
   session(): GameSession;
   interaction(): BattleInteractionState;
+  targeting(): BattleTargetingState;
   legalActions(): LegalAction[];
   selectAbility(abilityId: AbilityId): void;
   tapCell(at: Position): void;
@@ -38,6 +48,18 @@ function abilityFrom(action: LegalAction): AbilityAction | null {
   return null;
 }
 
+function uniquePositions(positions: readonly Position[]): Position[] {
+  const seen = new Set<string>();
+  const unique: Position[] = [];
+  for (const position of positions) {
+    const key = `${position.row}:${position.col}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(position);
+  }
+  return unique;
+}
+
 export function createBattleController(session: GameSession, random?: () => number): BattleController {
   let selectedAbilityId: AbilityId | null = null;
   let selectedSource: Position | null = null;
@@ -46,6 +68,46 @@ export function createBattleController(session: GameSession, random?: () => numb
   let cpuSequence = 0;
 
   const legalActions = (): LegalAction[] => listLegalActions(session.state, session.config.playerHeroId, 1);
+
+  const targeting = (): BattleTargetingState => {
+    if (!selectedAbilityId) {
+      return { abilityId: null, phase: 'idle', sources: [], targets: [] };
+    }
+
+    const candidates = legalActions()
+      .map(abilityFrom)
+      .filter((action): action is AbilityAction => action?.abilityId === selectedAbilityId);
+    const sourced = candidates.filter((action) => action.source !== undefined);
+
+    if (sourced.length > 0) {
+      if (!selectedSource) {
+        return {
+          abilityId: selectedAbilityId,
+          phase: 'select-source',
+          sources: uniquePositions(sourced.flatMap((action) => action.source ? [action.source] : [])),
+          targets: [],
+        };
+      }
+
+      return {
+        abilityId: selectedAbilityId,
+        phase: 'select-target',
+        sources: [selectedSource],
+        targets: uniquePositions(
+          sourced
+            .filter((action) => samePosition(action.source, selectedSource!))
+            .map((action) => action.target),
+        ),
+      };
+    }
+
+    return {
+      abilityId: selectedAbilityId,
+      phase: 'select-target',
+      sources: [],
+      targets: uniquePositions(candidates.map((action) => action.target)),
+    };
+  };
 
   const advanceCpuTurn = async (
     onStep?: () => void,
@@ -153,6 +215,7 @@ export function createBattleController(session: GameSession, random?: () => numb
   return {
     session: () => session,
     interaction: () => ({ selectedAbilityId, selectedSource, lastError, cpuThinking }),
+    targeting,
     legalActions,
     selectAbility,
     tapCell,
