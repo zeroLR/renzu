@@ -1,5 +1,7 @@
-import type { Board, Player } from '../../game/board/board';
+import type { Player } from '../../game/board/board';
 import type { LegalAction } from '../../game/action/legal-action';
+import type { AbilityActionState } from '../../game/action/ability-action';
+import type { HeroId } from '../../heroes/domain/hero-definition';
 import { rankActions, type EvaluatedAction } from '../evaluation/action-evaluator';
 import type { AiDifficultyProfile } from '../difficulty/difficulty-profile';
 
@@ -11,13 +13,14 @@ export interface AiDecision extends EvaluatedAction {
 }
 
 export function chooseAction(
-  board: Board,
+  state: AbilityActionState,
   actions: readonly LegalAction[],
   actor: Player,
+  heroId: HeroId,
   profile: AiDifficultyProfile,
   random: () => number = Math.random,
 ): AiDecision | null {
-  const ranked = rankActions(board, actions, actor, profile);
+  const ranked = rankActions(state, actions, actor, heroId, profile);
   if (!ranked.length) return null;
 
   const best = ranked[0];
