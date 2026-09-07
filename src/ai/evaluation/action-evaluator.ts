@@ -51,9 +51,10 @@ function placementLike(action: LegalAction): boolean {
 }
 
 function evaluatePlacement(
-  board: Board,
+  state: AbilityActionState,
   action: LegalAction,
   actor: Player,
+  heroId: HeroId,
   profile: AiDifficultyProfile,
 ): EvaluatedAction {
   if (action.kind === 'end-follow-up') {
@@ -65,23 +66,26 @@ function evaluatePlacement(
     };
   }
 
+  const board = state.match.board;
   const target = actionTarget(action);
   const enemy: Player = actor === 1 ? 2 : 1;
   const reasons: string[] = [];
   const attack = linePotential(board, target, actor);
   const defense = linePotential(board, target, enemy);
   const position = centerScore(board, target);
+  const simulation = simulateTacticalAction(state, action, actor, heroId);
 
-  if (attack >= 100_000) {
+  if (simulation?.immediateWin || attack >= 100_000) {
     return { action, score: WIN_SCORE, breakdown: { attack, defense, position, ability: 0, total: WIN_SCORE }, reasons: ['IMMEDIATE_WIN'] };
   }
-  if (defense >= 100_000) {
-    return { action, score: BLOCK_SCORE, breakdown: { attack, defense, position, ability: 0, total: BLOCK_SCORE }, reasons: ['FORCED_BLOCK'] };
+  if (simulation && simulation.enemyThreatsBefore > 0 && simulation.enemyThreatsAfter === 0) {
+    return { action, score: BLOCK_SCORE, breakdown: { attack, defense: BLOCK_SCORE, position, ability: 0, total: BLOCK_SCORE }, reasons: ['FORCED_BLOCK'] };
   }
 
   const total = attack * profile.attackWeight + defense * profile.defenseWeight + position;
   if (attack >= 3_200) reasons.push('ATTACK_PATTERN');
   if (defense >= 3_200) reasons.push('DEFEND_PATTERN');
+  if (simulation && simulation.enemyThreatsAfter < simulation.enemyThreatsBefore) reasons.push('THREAT_REDUCTION');
   if (position >= 32) reasons.push('CENTER_CONTROL');
   if (!reasons.length) reasons.push('POSITIONAL');
   return { action, score: total, breakdown: { attack, defense, position, ability: 0, total }, reasons };
@@ -163,7 +167,7 @@ export function evaluateAction(
   profile: AiDifficultyProfile,
 ): EvaluatedAction {
   return placementLike(action)
-    ? evaluatePlacement(state.match.board, action, actor, profile)
+    ? evaluatePlacement(state, action, actor, heroId, profile)
     : evaluateAbility(state, action, actor, heroId, profile);
 }
 
