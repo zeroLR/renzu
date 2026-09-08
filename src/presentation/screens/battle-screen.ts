@@ -8,13 +8,7 @@ import { abilityHelpText } from '../hud/ability-copy';
 import { boardLineBounds, boardPoint, boardSpacing, type BoardGeometry } from './board-geometry';
 
 const controllers = new WeakMap<GameSession, BattleController>();
-const BOARD: BoardGeometry = {
-  originX: 33,
-  originY: 190,
-  size: 324,
-  inset: 18,
-  logicalSize: 9,
-};
+const BOARD: BoardGeometry = { originX: 33, originY: 190, size: 324, inset: 18, logicalSize: 9 };
 
 export interface BattleResultActions {
   canNext: boolean;
@@ -43,22 +37,13 @@ export function renderBattleScreen(
   const targeting = controller.targeting();
   const playerTurn = state.match.status === 'playing' && state.match.phase === 'player';
   const cpuTurn = state.match.status === 'playing' && state.match.phase === 'opponent';
-  const pendingFollowUp = state.timing?.pendingFollowUp;
-  const precommitFollowUp = pendingFollowUp?.actor === 1 && pendingFollowUp.kind === 'precommit';
-  const triggeredFollowUp = pendingFollowUp?.actor === 1 && pendingFollowUp.kind === 'triggered';
 
   const mode = session.config.mode.kind === 'story' ? `STORY · ${session.config.mode.encounterId}` : 'FREE BATTLE';
   const modeNode = label(mode, type.caption, color.gold, '700');
   modeNode.position.set(33, 92);
   const turnNode = label(
     state.match.status === 'playing'
-      ? playerTurn
-        ? triggeredFollowUp
-          ? `TURN ${state.match.turn} · FOLLOW-UP`
-          : precommitFollowUp
-            ? `TURN ${state.match.turn} · STEP ARMED`
-            : `TURN ${state.match.turn} · YOUR MOVE`
-        : `TURN ${state.match.turn} · CPU THINKING`
+      ? playerTurn ? `TURN ${state.match.turn} · YOUR MOVE` : `TURN ${state.match.turn} · CPU THINKING`
       : state.match.status.toUpperCase(),
     type.heading,
     color.ink,
@@ -181,27 +166,18 @@ export function renderBattleScreen(
   const instruction = label(
     cpuTurn
       ? 'OPPONENT IS CONSIDERING THE BOARD'
-      : triggeredFollowUp && !interaction.selectedAbilityId
-        ? 'SEVER AVAILABLE · USE IT OR END TURN'
-        : precommitFollowUp
-          ? 'STEP ARMED · PLACE A STONE'
-          : interaction.selectedAbilityId
-            ? `${interaction.selectedAbilityId.toUpperCase()} · ${targeting.phase === 'select-source' ? 'SELECT SOURCE' : 'SELECT TARGET'}`
-            : 'PLACE A STONE OR USE AN ABILITY',
+      : interaction.selectedAbilityId
+        ? `${interaction.selectedAbilityId.toUpperCase()} · ${targeting.phase === 'select-source' ? 'SELECT SOURCE' : 'SELECT TARGET'}`
+        : 'PLACE A STONE OR USE AN ABILITY',
     10,
-    cpuTurn || precommitFollowUp || triggeredFollowUp || interaction.selectedAbilityId ? color.gold : color.muted,
+    cpuTurn || interaction.selectedAbilityId ? color.gold : color.muted,
     '700',
   );
   instruction.position.set(43, 592);
   root.addChild(heroNode, instruction);
 
   const legal = controller.legalActions();
-  const legalAbilityIds = legal.flatMap((action): AbilityId[] => {
-    if (action.kind === 'ability') return [action.abilityId];
-    if (action.kind === 'follow-up' && action.action.kind === 'ability') return [action.action.abilityId];
-    return [];
-  });
-  const canEndFollowUp = legal.some((action) => action.kind === 'end-follow-up');
+  const legalAbilityIds = legal.flatMap((action): AbilityId[] => action.kind === 'ability' ? [action.abilityId] : []);
 
   hero.defaultLoadout.forEach((abilityId: AbilityId, index: number) => {
     const ready = playerTurn && legalAbilityIds.includes(abilityId);
@@ -219,10 +195,8 @@ export function renderBattleScreen(
     root.addChild(button);
   });
 
-  const contextualAbilityId = interaction.selectedAbilityId
-    ?? (precommitFollowUp ? 'step' : triggeredFollowUp ? 'sever' : null);
-  if (contextualAbilityId) {
-    const help = label(abilityHelpText(contextualAbilityId), 9, color.inkSoft, '500');
+  if (interaction.selectedAbilityId) {
+    const help = label(abilityHelpText(interaction.selectedAbilityId), 9, color.inkSoft, '500');
     help.position.set(43, 683);
     root.addChild(help);
   }
@@ -233,18 +207,6 @@ export function renderBattleScreen(
     const resource = label(`${resourceId.toUpperCase()}  ${current}${hero.economy.max ? ` / ${hero.economy.max}` : ''}`, type.caption, color.inkSoft, '600');
     resource.position.set(43, 706);
     root.addChild(resource);
-  }
-
-  if (canEndFollowUp) {
-    const end = actionButton('END TURN', 112, 34, () => {
-      controller.endFollowUp();
-      onChange();
-      if (session.state.match.status === 'playing' && session.state.match.phase === 'opponent') {
-        void controller.advanceCpuTurn(onChange);
-      }
-    });
-    end.position.set(235, 700);
-    root.addChild(end);
   }
 
   if (lastAction) {
