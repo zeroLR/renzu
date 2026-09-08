@@ -2,16 +2,7 @@
 
 ## Purpose
 
-This document is the product-level roadmap from the current playable staging build to RENZU v1.0 and post-launch expansion.
-
-The roadmap answers four questions:
-
-1. What product milestone are we currently building toward?
-2. What must exist before the next milestone starts?
-3. What is intentionally outside the current release scope?
-4. What evidence is required to call a milestone complete?
-
-Implementation sequencing lives in [`execution-plan.md`](execution-plan.md). Architecture and deployment details remain in [`architecture.md`](architecture.md) and [`deployment.md`](deployment.md).
+This document defines the product-level path from the current playable staging build to RENZU v1.0. Implementation sequencing lives in [`execution-plan.md`](execution-plan.md); architecture and deployment contracts live in [`architecture.md`](architecture.md) and [`deployment.md`](deployment.md).
 
 ---
 
@@ -19,24 +10,23 @@ Implementation sequencing lives in [`execution-plan.md`](execution-plan.md). Arc
 
 RENZU is a hero-based tactical board strategy game.
 
-The board remains authoritative. Heroes are tactical engines that alter how players build, defend, disrupt, and convert board patterns; they do not replace board strategy with a separate HP/ATK combat layer.
+The board remains authoritative. Heroes change how players build, defend, control, and disrupt patterns; they do not replace board strategy with a separate combat layer.
 
 ### Product principles
 
 - **Board decisions remain authoritative.**
 - **Heroes are gameplay engines, not stat packages.**
+- **Consistency before special-case flow.**
 - **Horizontal mastery before vertical power.**
 - **Readability before spectacle.**
 - **Short-session depth.**
 - **Learn through play.**
 - **Mobile-first interaction, desktop-compatible presentation.**
-- **Staging is part of development, not a release afterthought.**
+- **Staging is part of development.**
 
 ---
 
 ## v1.0 scope lock
-
-The following is the target v1.0 product boundary.
 
 ### Modes
 
@@ -47,35 +37,50 @@ The following is the target v1.0 product boundary.
 
 - 9×9 intersection-based board
 - five-in-a-row victory grammar
-- hero abilities that manipulate position, timing, board effects, or tactical economy
+- one shared fixed turn topology across active heroes
+- hero abilities that manipulate position, board effects, targeting, or tactical economy
 - CPU Easy and Normal
 
-### Hero roster
+### Active hero roster
 
-Target: **5 polished heroes**.
+Target baseline: **3 polished heroes**.
 
 | Hero | Engine | Strategic identity |
 | --- | --- | --- |
 | Vanguard | Cooldown | defense, stability, controlled repositioning |
-| Arcanist | Resource / Mana | resource cycling, board-space conversion |
-| Shade | Conditional / Pressure | disruption, pressure, enemy-board interaction |
-| Architect | Formation | setup, formation, spatial control |
-| Swordmaster | Momentum | tempo, chaining, forward pressure |
+| Arcanist | Mana | resource cycling, spatial control |
+| Shade | Pressure | disruption, contact, enemy-board interaction |
+
+Architect and Swordmaster are removed from the active v1 baseline. Replacement or additional heroes are not required until the three-hero fixed-turn gameplay pass proves how much differentiation is achievable without changing turn topology.
+
+### Turn topology baseline
+
+```text
+Player Action
+→ Turn Resolution
+→ CPU Thinking
+→ CPU Action
+→ Player
+```
+
+The active runtime does not use precommit, after-step, triggered follow-up, chained same-turn hero actions, or hero-specific END TURN phases.
+
+A future hero may propose a different turn topology only after R3.1 validates the fixed-turn baseline and the product benefit clearly outweighs the added rules, AI, UX, and QA complexity.
 
 ### Story
 
-Target: **6 chapters**.
+Target: **6 chapters**, subject to content pacing validation.
 
-Recommended chapter learning arc:
+Recommended learning arc:
 
 1. Rules and board authority
 2. Defense and threat response
-3. Resource and timing
+3. Resource conversion
 4. Disruption and tactical removal
-5. Formation and spatial control
+5. Spatial control and matchup adaptation
 6. Mastery and mixed-system encounters
 
-Each chapter should be data-driven and reuse the shared rules engine rather than add chapter-specific combat code.
+Each chapter must reuse the shared rules/session engine rather than introduce chapter-specific combat flow.
 
 ### Progression
 
@@ -95,29 +100,26 @@ Each chapter should be data-driven and reuse the shared rules engine rather than
 ### Explicitly not in v1.0
 
 - Online PvP
-- backend accounts
-- cloud save
+- backend accounts / cloud save
 - ranking / leaderboard
-- guilds / social systems
+- guild/social systems
 - Roguelike mode
-- Hard / Extreme / Manic / Chaos difficulty tiers
+- Hard / Extreme / Manic / Chaos
 - subscriptions / ads / gacha
-- native mobile application packaging
-
-These items may be revisited after the core single-player product demonstrates retention and replay value.
+- native mobile packaging
 
 ---
 
 # Milestone map
 
 ```text
-R0 Foundation
+R0 Foundation                  ✅
    ↓
-R1 Staging Validation
+R1 Staging Validation          ✅ product sign-off
    ↓
-R2 Combat Complete
+R2 Combat Complete             ✅ product sign-off
    ↓
-R3 Hero + Story Content Complete
+R3 Hero + Story Content        ← current
    ↓
 R4 Progression Complete
    ↓
@@ -128,8 +130,6 @@ R6 Closed Beta
 R7 Release Candidate
    ↓
 R8 v1.0 Production
-   ↓
-Post-launch Expansion
 ```
 
 ---
@@ -138,135 +138,34 @@ Post-launch Expansion
 
 **Status: complete.**
 
-### Product outcome
-
-RENZU exists as an independent product codebase with stable gameplay/application boundaries rather than as a playground prototype.
-
-### Delivered foundation
-
-- standalone PixiJS + TypeScript + Vite application
-- board and match domain
-- action/legal-action model
-- hero definitions and economy contracts
-- board effects and action timing
-- AI evaluation / decision foundation
-- CPU session orchestration
-- progression/profile storage foundation
-- Story and Free Battle mode configs
-- product routing and portrait-first presentation shell
-- interactive battle screen
-- Story settlement/rematch/continuation lifecycle
-- GitHub Pages staging/production deployment foundation
-
-### Exit condition
-
-Future product work can add content and polish without returning to a monolithic prototype runtime.
+RENZU exists as an independent PixiJS + TypeScript product with stable board, match, legal-action, hero, AI, progression, presentation, and deployment boundaries.
 
 ---
 
 ## R1 — Staging Validation
 
-**Status: current milestone.**
+**Status: complete by product sign-off.**
 
-### Goal
+Established staging deployment, mobile/browser validation, intersection-based Gomoku board presentation, CPU thinking cadence, and deploy health gates.
 
-Prove that the current vertical slice survives real browsers and real mobile devices, and establish staging as the normal feedback loop for all later milestones.
-
-### Required work
-
-- iPhone Safari smoke
-- Android Chrome smoke
-- desktop Chrome smoke
-- one secondary desktop browser
-- safe-area and viewport validation
-- touch target validation
-- background / foreground resume check
-- reload and profile persistence check
-- Story E1-1 completion → reload → E1-2 unlock check
-- Free Battle complete-match check
-- ability targeting check
-- renderer boot / visible fallback check
-- deployment smoke CI false-positive cleanup
-
-### Exit criteria
-
-A player can, on a real phone:
-
-1. open staging;
-2. enter Story;
-3. complete E1-1;
-4. observe normal CPU turn cadence;
-5. see the result lifecycle;
-6. reload the browser;
-7. confirm progression persisted and E1-2 remains unlocked;
-8. continue without developer tooling.
-
-No P0/P1 device or deployment blockers remain.
-
-### Deliberately deferred
-
-- large VFX pass
-- full audio set
-- extra heroes
-- later Story chapters
+Remaining device checks may continue as regression QA but no longer block the roadmap.
 
 ---
 
 ## R2 — Combat Complete
 
-### Goal
+**Status: complete, then simplified by product decision.**
 
-Make the shared combat model complete enough that every ability exposed by the v1 hero roster has reliable rules, lifecycle, AI interaction, and tests.
+R2 proved the reusable combat stack:
 
-### Required work
+- legal-action authority
+- board-effect lifetime
+- pattern/passive lifecycle
+- targeting readability
+- ability-aware one-action AI simulation
+- combat characterization gate
 
-#### Ability fidelity
-
-- Bulwark
-- Rally
-- Lattice
-- final Step semantics
-- final Sever timing
-- Charge edge cases
-- Guard / Seal / Corruption / Flame lifetime verification
-
-#### Passive lifecycle
-
-- pattern-aware passive events
-- Vanguard pattern reward semantics
-- Swordmaster momentum reward/decay semantics
-- Architect formation evaluation completion
-- Shade pressure lifecycle verification
-- Arcanist resource flow verification
-
-#### Legal-action contract
-
-Hero definition → loadout → legal action → resolver must be the source of truth. Presentation must not maintain a parallel ability-rule system.
-
-#### AI ability awareness
-
-AI should recognize tactical outcomes produced by abilities, including:
-
-- ability-generated wins
-- ability-generated forced blocks
-- threat removal
-- board-space denial
-- position/topology changes
-
-The target is credible Easy/Normal behavior, not maximum search depth.
-
-### Exit criteria
-
-For every v1 hero:
-
-- placement works;
-- passive lifecycle works;
-- each exposed ability has legal targeting and resolution;
-- economy/cooldown behavior is correct;
-- CPU can use the hero without entering invalid states;
-- win detection remains authoritative;
-- characterization tests cover core behavior;
-- staging does not expose fake or unsupported actions.
+Architect/Swordmaster and their follow-up timing experiments were valid prototype/R2 exploration, but are intentionally removed from the active product baseline. R2's durable output is the shared combat architecture, not preservation of every experimental hero mechanic.
 
 ---
 
@@ -274,53 +173,71 @@ For every v1 hero:
 
 ### Goal
 
-Turn the vertical slice into a complete single-player game content set.
+Prove the active hero model is strategically rich under one clean battle flow, then scale Story content on top of that stable contract.
 
-### R3A — Five-hero gameplay pass
+### R3.1 — Three-Hero Fixed-Turn Gameplay Pass
 
-Each hero must feel strategically distinct before content quantity expands.
+Validate Vanguard, Arcanist, and Shade in Free Battle.
 
-Quality bar:
+For each hero, prove:
 
-- different board-reading priorities;
-- different economy/readiness rhythm;
-- at least one signature tactical pattern;
-- readable counterplay;
-- no hero requires bespoke battle-screen architecture.
+- a distinct board-reading priority;
+- a distinct economy/readiness rhythm;
+- at least one signature tactical sequence;
+- understandable counterplay;
+- a default loadout that demonstrates the engine;
+- Easy/Normal CPU behavior consistent with the same identity.
 
-### R3B — Story content schema
+The key product question is:
 
-Story content should become data-driven.
+> Can board manipulation + economy + passive + targeting + temporary effects create enough hero depth without changing turn topology?
 
-Expected encounter contract should support concepts such as:
+**Exit:** all three heroes are recognizably different on staging with no P0/P1 identity or turn-flow blockers.
 
-- encounter id / chapter
+Only after this exit may we evaluate a fourth/fifth hero concept or a hero that changes turn topology.
+
+### R3.2 — Story Content Schema
+
+Move Story encounters to a content-oriented contract supporting:
+
+- encounter id / chapter / order
 - player hero rule
-- CPU hero
-- CPU difficulty
+- CPU hero + difficulty
 - optional board preset
 - optional mechanic modifier
-- rewards
-- unlock rule
 - teaching concept / copy
+- rewards / unlock rule
+- boss flag
 
-### R3C — Six chapters
+**Exit:** adding a normal encounter does not require editing battle runtime code.
 
-Target: approximately 6 encounters per chapter, subject to playtest validation rather than a hard content quota.
+### R3.3 — Chapters 2–3
 
-Suggested shape:
+Validate chapter pacing before producing the full content graph.
 
-- standard tactical encounters
-- one mechanic-focused encounter
-- one boss/mastery encounter
+Focus:
 
-### Difficulty
+- defense / threat response
+- resource conversion / spatial control
+- tutorial readability without text walls
+- Easy/Normal placement
 
-Ship Story with Easy and Normal only.
+### R3.4 — Chapters 4–6
 
-### Exit criteria
+Complete the Story only after the first-half structure is validated.
 
-A clean profile can start Chapter 1 and progress through the final Chapter 6 encounter without debug overrides or missing content states.
+Focus:
+
+- disruption
+- matchup adaptation
+- mixed mastery
+- boss/mastery encounters
+
+### R3.5 — Story / Easy-Normal Balance Pass
+
+Tune encounter policy after the complete Story graph exists.
+
+**R3 exit:** a clean profile can progress from Chapter 1 through the final Chapter 6 encounter without debug overrides or missing content states.
 
 ---
 
@@ -328,49 +245,18 @@ A clean profile can start Chapter 1 and progress through the final Chapter 6 enc
 
 ### Goal
 
-Create a replay/progression loop that rewards broader tactical expression instead of raw stat inflation.
+Create a replay/progression loop that broadens tactical expression rather than inflating stats.
 
-### Required work
+Required work:
 
-#### Reward economy
+- Soul and Skill Fragment reward policy
+- first-clear / repeat-clear / boss rewards
+- hero unlock loop for the active roster
+- Hero Archive
+- sidegrades / alternate loadout breadth
+- profile normalization and migration hardening
 
-Define and balance:
-
-- Soul earn sources
-- Skill Fragment earn sources
-- encounter rewards
-- repeat-clear policy
-- boss / chapter rewards
-
-#### Hero unlock loop
-
-Unlock rules must be understandable and achievable through normal play.
-
-#### Hero Archive
-
-The Heroes route becomes a real product surface for:
-
-- identity
-- engine
-- passive
-- abilities
-- unlock state
-- mastery / sidegrade visibility
-
-#### Skill Fragments
-
-Preferred use:
-
-- alternate ability unlocks
-- loadout breadth
-- sidegrades
-- mastery choices
-
-Avoid turning the main strategy layer into percentage-stat grinding.
-
-### Exit criteria
-
-The loop is coherent from battle → result → reward → unlock/mastery → next battle, and progression survives reload/version normalization.
+**Exit:** battle → result → reward → unlock/mastery → next battle is coherent and persists safely.
 
 ---
 
@@ -378,61 +264,22 @@ The loop is coherent from battle → result → reward → unlock/mastery → ne
 
 ### Goal
 
-Move from “functionally playable” to “recognizably RENZU.”
+Move from functionally playable to recognizably RENZU.
 
-### Tactical feedback
-
-Prioritize feedback that communicates board state:
+Priority feedback:
 
 - stone placement
 - last action
-- threat creation / forced defense
+- threat / forced defense
 - ability targeting and resolution
 - board-effect appearance / expiry
 - resource gain / spend
 - cooldown ready
-- victory line
-- result transition
+- victory line / result transition
 
-### Motion
+Add a restrained shared motion/audio/haptic vocabulary. Gameplay state must remain readable and the fixed turn flow must never become obscured by presentation.
 
-Motion must not hide board information.
-
-Recommended scale:
-
-- state transitions: short
-- stone feedback: very short
-- ability resolution: short and legible
-- victory/result: longer, but bounded
-
-### Audio
-
-Minimum useful set:
-
-- player stone
-- opponent stone
-- invalid action
-- ability ready
-- ability resolve
-- threat / important tactical event
-- victory
-- defeat
-
-### Haptics
-
-Use where supported, with graceful fallback.
-
-### UX polish
-
-- disabled and targeting states
-- readable economy meters
-- clear turn state
-- result continuation hierarchy
-- settings/accessibility surface as required by beta feedback
-
-### Exit criteria
-
-A full match has deliberate pacing and feedback without debug-style presentation or ambiguous action state.
+**Exit:** a complete match feels deliberate, responsive, and unambiguous without debug-style presentation.
 
 ---
 
@@ -442,178 +289,89 @@ A full match has deliberate pacing and feedback without debug-style presentation
 
 Validate comprehension, retention signals, difficulty, and browser/device stability with external players.
 
-### Audience
+Stabilize diagnostics around:
 
-Start small. A focused group is more useful than broad acquisition before telemetry and content stability exist.
-
-### Diagnostics / analytics
-
-Stabilize an event schema around:
-
-- session start/end
-- mode start
-- encounter start/end
-- placement
-- ability use
-- match result
-- rematch
-- hero unlock
-- difficulty
+- session / mode / encounter start-end
+- hero matchup
+- placement / ability use
+- result / rematch
 - duration / turn count
+- progression
 
-### Balance questions
+Harden profile versioning, migrations, corrupted-save fallback, reset, and diagnostics export.
 
-Measure:
-
-- encounter fail rate
-- boss churn points
-- average turn count
-- match duration
-- hero usage / win patterns
-- ability usage
-- rematch rate
-- progression drop-off
-
-### Save hardening
-
-Before beta expands:
-
-- profile versioning
-- migrations
-- corrupted-save fallback
-- reset profile
-- useful diagnostics export
-
-### Exit criteria
-
-- no open P0 issues;
-- P1 issues are understood and bounded;
-- save upgrades are safe;
-- core Story is completable on supported browsers;
-- balance no longer depends only on developer intuition.
+**Exit:** no open P0; P1 issues are understood and bounded; core Story is completable on supported browsers.
 
 ---
 
 ## R7 — Release Candidate
 
-### Goal
+Freeze v1 product scope.
 
-Freeze v1 product scope and prove a candidate revision can be promoted directly to production.
+Do not add heroes, abilities, chapters, progression systems, or major navigation/layout changes after content freeze unless they resolve a release blocker.
 
-### Feature freeze
+Required hardening:
 
-Do not add:
-
-- heroes
-- abilities
-- chapters
-- new progression systems
-- major navigation/layout changes
-
-Allowed work:
-
-- P0/P1 fixes
-- balance
-- performance
-- copy
-- accessibility fixes
-- small UX corrections
-
-### Release hardening
-
-- content lock
+- browser/performance QA
+- accessibility/settings minimum
 - version/build SHA visibility
-- release notes process
-- production smoke
+- content lock
+- migration check
 - rollback procedure
-- supported-browser QA matrix
-- performance/memory check
-- persistence migration check
-
-### Exit criteria
-
-An RC tag passes CI, staging validation, production-candidate smoke, and the agreed QA matrix without known release blockers.
+- release notes / known issues
+- production-candidate smoke
 
 ---
 
 ## R8 — v1.0 Production
 
-### Goal
-
-Ship the locked v1 scope as the first public production release.
-
-### Release contents
+Release contents:
 
 - Main Story
 - Free Battle
-- 5 polished heroes
+- **3 polished active heroes**
 - 6 Story chapters
 - Easy / Normal CPU
 - Soul / Skill Fragment progression
 - Hero unlock / Archive
 - mobile + desktop web support
-- production monitoring/diagnostics sufficient to detect boot and fatal-session issues
+- boot/fatal-session diagnostics
 
-### Success condition
-
-The product is stable enough that subsequent work is chosen from player evidence rather than unfinished v1 foundation work.
+Success means subsequent development is chosen from player evidence rather than unfinished v1 foundation work.
 
 ---
 
-# Post-launch tracks
+# Post-launch / future exploration
 
-Post-launch work should be selected by observed player behavior rather than precommitted as v1 scope.
+## Hero expansion
 
-## Track A — Low-cost replayability
+A fourth/fifth hero is evaluated after R3.1, not assumed in advance.
+
+Preferred order of exploration:
+
+1. new fixed-turn board/economy identity;
+2. new targeting or board-effect grammar;
+3. only then, if necessary, altered turn topology.
+
+## Low-cost replayability
 
 - Daily Puzzle
 - Weekly Challenge
 - boss remixes
 - board presets
-- Hero mastery challenges
+- mastery challenges
 
-These reuse the existing deterministic board/action engine and are the preferred first live-content experiments.
+## Roguelike
 
-## Track B — Roguelike expansion
+Preferred first major mode expansion if hero/board interaction proves replayable.
 
-Roguelike is the preferred first major mode expansion if the hero/board interaction proves replayable.
+## Higher difficulty
 
-Potential loop:
+Hard+ should change decision policy and encounter pressure rather than add opaque stat scaling.
 
-```text
-Hero selection
-  ↓
-Battle
-  ↓
-Tactical modifier / sidegrade
-  ↓
-Battle / Elite
-  ↓
-Build evolution
-  ↓
-Boss
-```
+## Online era
 
-Keep it on the same game-domain and legal-action foundation.
-
-## Track C — Higher difficulty
-
-Hard / Extreme / Manic / Chaos should change decision policy and encounter pressure, not simply increase opaque numbers.
-
-## Track D — Online era
-
-Only after the single-player product justifies the investment:
-
-- account
-- cloud save
-- authoritative online match
-- matchmaking
-- ranking
-- reconnect
-- anti-cheat
-- spectating
-
-Do not pre-build this infrastructure during v1 unless a concrete requirement appears.
+Only after the single-player product justifies account/cloud/matchmaking infrastructure.
 
 ---
 
@@ -625,25 +383,12 @@ A feature enters the active milestone only when it is necessary for that milesto
 
 ## Architecture rule
 
-Refactor only when one of these is true:
+Refactor only when current architecture blocks the next product slice, duplicated rules risk divergence, staging/beta exposes a real boundary defect, or the change measurably improves delivery safety.
 
-- current architecture blocks the next product slice;
-- duplicated rules risk divergent gameplay behavior;
-- a staging/beta defect exposes a real boundary problem;
-- the change measurably improves delivery safety.
+## Turn-topology rule
 
-Avoid architecture work whose main value is aesthetic cleanliness.
-
-## Development allocation target
-
-From R1 onward, the default investment mix should trend toward:
-
-- ~20% architecture / hardening
-- ~50% gameplay + content
-- ~30% UX / feel / QA
-
-This is directional, not a time-tracking requirement.
+Do not create hero-specific phases because they are novel. First attempt to express the identity through the fixed-turn primitives. A topology exception requires explicit product justification and a staging validation plan.
 
 ## Milestone gate rule
 
-Do not call a milestone complete because its feature list exists. It is complete only when its exit criteria can be demonstrated on staging or the relevant release environment.
+A milestone is complete only when its exit criteria can be demonstrated on staging or the relevant release environment.
