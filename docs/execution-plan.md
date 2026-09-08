@@ -2,606 +2,340 @@
 
 ## Purpose
 
-This document turns the product milestones in [`roadmap.md`](roadmap.md) into an execution sequence that can be implemented as small, reviewable pull requests.
-
-The plan is intentionally organized around **dependencies and release gates**, not calendar promises. Each slice should be small enough to validate independently on CI and, when appropriate, staging.
+This document converts [`roadmap.md`](roadmap.md) into small, reviewable implementation slices organized around dependencies and release gates rather than calendar promises.
 
 ---
 
 # Operating model
 
-## Branching and release flow
-
 ```text
 feature/* or fix/*
-  ↓
-Pull Request
-  ↓
-CI
-  ↓
-main
-  ↓
-Staging
-  ↓
-Device / browser validation
-  ↓
-Release tag
-  ↓
-Production
+→ Pull Request
+→ CI
+→ main
+→ Staging
+→ Device / browser validation
+→ Release tag
+→ Production
 ```
 
 Rules:
 
 1. `main` stays releasable.
-2. Feature work lands through focused PRs.
-3. Every gameplay rule change gets characterization coverage.
-4. Presentation must consume shared legal-action/session state rather than duplicate gameplay rules.
-5. Staging feedback can reorder the next slices when it exposes a real product blocker.
-6. Do not stack unrelated gameplay, balance, UI redesign, and refactor work in one PR.
+2. Gameplay changes receive characterization coverage.
+3. Presentation consumes shared legal-action/session state instead of duplicating gameplay rules.
+4. Staging feedback may reorder the next slice when it exposes a real product blocker.
+5. Do not combine unrelated gameplay, balance, UI redesign, deployment, and refactor work.
+6. The active hero baseline uses one fixed turn topology; exceptions require explicit product approval.
 
----
+## Definition of Done
 
-# Definition of Done for a slice
+A slice is done when applicable conditions are true:
 
-A slice is done when all applicable conditions are true:
-
-- behavior is implemented through the intended architecture boundary;
-- tests cover the important contract or regression;
-- `npm test` passes;
-- target build passes;
-- no known new black-screen / boot failure path is introduced;
-- mobile interaction remains usable where the slice changes input/UI;
-- staging validation is completed for visible gameplay changes;
-- documentation is updated when a durable contract changes.
+- behavior uses the intended architecture boundary;
+- regression tests cover the important contract;
+- tests and target build pass;
+- no new boot/black-screen path is introduced;
+- mobile interaction remains usable when input/UI changes;
+- visible changes are validated on staging;
+- durable contracts are documented.
 
 A merged PR is not automatically a completed product slice if staging disproves the intended behavior.
 
+## Severity
+
+- **P0** — release blocking: boot failure, progression loss, unrecoverable save, match cannot complete, deployment cannot publish.
+- **P1** — milestone blocking: common legal action wrong, supported mobile input unusable, Story stuck, important ability unreliable, CPU/session stuck.
+- **P2** — fix before RC: misleading feedback, balance outlier, readability issue, non-critical browser inconsistency.
+- **P3** — polish/backlog.
+
 ---
 
-# Priority classification
+# Completed foundation
 
-## P0 — release blocking
+## R1 — Staging Validation
 
-- boot failure / black screen
-- corrupted or unrecoverable save
-- game cannot complete a legal match
-- progression loss
-- deployment cannot publish the target revision
+Closed by product sign-off. Staging, mobile/browser smoke, Gomoku intersection presentation, CPU thinking cadence, and deployment smoke behavior are established.
 
-## P1 — milestone blocking
+## R2 — Combat Complete
 
-- common legal action produces wrong state
-- input unusable on a supported mobile device
-- Story progression cannot continue
-- important ability cannot be used reliably
-- CPU/session can enter a stuck turn
+Closed by product sign-off. Durable outputs:
 
-## P2 — should fix before RC
+- shared legal-action/resolver authority;
+- pattern/passive lifecycle;
+- board-effect lifetime;
+- combat targeting readability;
+- one-action tactical AI simulation;
+- combat regression gate.
 
-- misleading feedback
-- balance outlier
-- visual/readability problem
-- non-critical browser inconsistency
-
-## P3 — polish / backlog
-
-- optional animation refinement
-- minor copy/layout refinement
-- non-essential convenience feature
+R2 also explored Architect formation and Swordmaster Step/Sever follow-up timing. Those experiments are intentionally **not** compatibility requirements after the three-hero fixed-turn simplification.
 
 ---
 
 # Current execution sequence
 
-## R1 — Staging Validation
+## R3.1 — Three-Hero Fixed-Turn Gameplay Pass
 
-### R1.1 — Device smoke matrix
+**Goal:** prove that Vanguard, Arcanist, and Shade create meaningfully different match plans while sharing one clean battle flow.
 
-**Goal:** prove the current vertical slice on real devices.
-
-Validate:
-
-- iPhone Safari
-- Android Chrome
-- desktop Chrome
-- one secondary desktop browser
-
-Flow:
+### Fixed turn contract
 
 ```text
-Home
-→ Story
-→ E1-1
-→ player placement
-→ CPU thinking / response
-→ ability interaction
-→ result
-→ next / return
-→ reload
-→ progression persists
+Player Action
+→ Resolution / Passive / Economy / Effects
+→ CPU Thinking
+→ CPU Action
+→ Resolution / Passive / Economy / Effects
+→ Player
 ```
 
-Also validate:
+Every active legal placement or ability completes the acting side's logical turn.
 
-- safe areas
-- browser chrome resize
-- accidental scrolling/overscroll
-- touch targets near board edges
-- background → foreground resume
-- renderer boot
-- localStorage persistence
+The active runtime must not reintroduce:
 
-**Exit:** no P0/P1 device blockers.
+- precommit phases;
+- Step / after-step;
+- triggered follow-up;
+- chained same-turn hero actions;
+- hero-specific `END TURN` escape actions.
 
----
+### Active roster
 
-### R1.2 — Deployment smoke gate cleanup
+For Vanguard, Arcanist, and Shade define and validate:
 
-**Goal:** make CI report deployment health accurately.
+- primary tactical question;
+- economy/readiness rhythm;
+- signature play sequence;
+- weakness/counterplay;
+- default loadout;
+- beginner behavior;
+- expected CPU behavior.
 
-Known constraint: custom-domain HTTP checks may be rejected by the hosting/CDN layer even when the deployed page is browser-accessible.
+### Staging comparison
 
-Preferred contract:
+Required comparisons:
 
-- build/base-path verification remains blocking;
-- `actions/deploy-pages` success remains blocking;
-- canonical Pages-origin smoke may be blocking if stable;
-- custom-domain smoke should not create a false deployment failure unless it represents the actual user-facing availability contract.
+- Vanguard vs Arcanist — protected/cooldown topology vs Mana/spatial control;
+- Arcanist vs Shade — spatial control vs contact disruption;
+- Vanguard vs Shade — stability/repositioning vs enemy-pressure removal.
 
-**Exit:** successful deployments do not report false-negative failure, and real asset-path failures remain detectable.
+Use Issue #31 as the staging matrix.
 
----
+### Exit criteria
 
-# R2 — Combat Complete
+- only Vanguard / Arcanist / Shade are active in runtime and setup;
+- legacy profile data safely drops removed hero IDs;
+- all three use the same turn topology;
+- all three create recognizably different board-reading priorities and economy rhythms;
+- default loadouts demonstrate those identities;
+- Easy/Normal CPU behavior does not contradict them in common situations;
+- no P0/P1 identity or turn-flow blocker remains.
 
-## R2.1 — Advanced ability completion
+### Decision gate after R3.1
 
-Implement the remaining v1 ability semantics through the shared resolver.
+Only after the fixed-turn baseline is validated do we evaluate:
 
-Scope:
+1. whether a fourth/fifth hero is necessary for v1;
+2. whether additional differentiation can remain fixed-turn;
+3. whether any hero-specific turn-topology change is worth its rules/AI/UX/testing complexity.
 
-- Bulwark
-- Rally
-- Lattice
-- Step final semantics
-- Sever final timing
-- Charge edge cases
-- board effect interactions as required
-
-For each ability:
-
-```text
-Definition
-→ Candidate generation
-→ Legal targeting
-→ Economy readiness
-→ Resolution
-→ Timing / turn consumption
-→ Board effects
-→ History
-→ AI availability
-```
-
-Tests should focus on legal/illegal target boundaries and lifecycle effects, not every coordinate permutation.
-
-**Do not combine with major balance tuning.**
+Do not assume a topology-changing hero is required.
 
 ---
 
-## R2.2 — Pattern/passive lifecycle
+## R3.2 — Story Content Schema
 
-Create the stable pattern-event boundary needed by placement passives.
+Move encounter definition toward a typed content contract.
 
-Target responsibilities:
+Recommended capabilities:
 
-- evaluate meaningful placement outcome once;
-- expose a reusable passive context;
-- avoid re-scanning the board independently inside each hero;
-- keep passive resolution deterministic.
-
-Complete:
-
-- Vanguard fortified reward semantics
-- Swordmaster momentum gain/decay semantics
-- Architect formation readiness
-- Shade pressure verification
-- Arcanist flow verification
-
-**Exit:** no placeholder pattern reward remains in the v1 runtime.
-
----
-
-## R2.2.5 — Combat targeting readability
-
-**Goal:** make ability interaction understandable from the board state without trial-and-error tapping before deeper AI work multiplies combat test cases.
-
-Presentation must project the shared legal-action surface rather than duplicate hero targeting rules.
-
-Required interaction states:
-
-```text
-Select Ability
-→ legal source markers when a source is required
-→ selected-source confirmation
-→ legal target markers for that source
-→ resolve / cancel
-```
-
-Also provide:
-
-- a clearly distinct selected ability state;
-- concise `SELECT SOURCE` / `SELECT TARGET` guidance;
-- contextual copy for the selected ability;
-- existing Step / Sever follow-up guidance without adding animation or VFX requirements.
-
-Keep markers restrained so target hints remain distinguishable from last-move and board-effect markers.
-
-**Exit:** after selecting a v1 ability, the player can identify the next legal interaction from visible board/HUD feedback without learning targeting through invalid-action errors.
-
----
-
-## R2.3 — Ability-aware AI evaluation
-
-Extend AI evaluation from generic ability opportunity to simulated tactical outcome where necessary.
-
-Priority cases:
-
-1. ability-created immediate win
-2. ability-created forced block
-3. enemy threat removal
-4. position/topology movement
-5. blocking/denial value
-
-Keep Easy / Normal bounded and readable. Avoid deep search work unless profiling proves it is needed.
-
-**Exit:** CPU no longer ignores obviously winning/defensive ability outcomes.
-
----
-
-## R2.4 — Combat characterization gate
-
-Create one milestone-focused regression pass covering:
-
-- all five hero engines
-- legal placements
-- ability lifecycle
-- cooldown/resources
-- board-effect expiry
-- Step/follow-up chain
-- CPU full-turn return
-- match ending from normal and ability actions
-
-This is a gate PR/test pass, not an architecture redesign.
-
-**Exit:** R2 staging combat matrix is green.
-
----
-
-# R3 — Hero + Story Content Complete
-
-## R3.1 — Five-hero gameplay pass
-
-Before multiplying Story content, validate each hero's identity in Free Battle.
-
-For each hero define:
-
-- primary tactical question
-- economy rhythm
-- signature play pattern
-- weakness/counterplay
-- default loadout
-- expected beginner behavior
-- expected CPU behavior
-
-The objective is differentiation, not perfect balance.
-
-**Exit:** each hero creates a recognizably different match plan.
-
----
-
-## R3.2 — Story content schema
-
-Move encounter definition toward a content-oriented contract.
-
-Recommended fields/capabilities:
-
-- id
-- chapter
-- sequence/order
+- id / chapter / order
 - player hero constraints
-- CPU hero
-- difficulty
+- CPU hero / difficulty
 - optional board preset
-- optional encounter modifier
+- optional mechanic modifier
 - concepts/tutorial copy
 - reward definition
 - unlock rule
 - boss flag
 
-Keep mode orchestration generic.
+Keep mode orchestration generic and keep encounter content out of battle runtime.
 
-**Exit:** adding a normal encounter does not require editing battle runtime code.
+**Exit:** adding a normal encounter does not require editing combat/session code.
 
 ---
 
 ## R3.3 — Chapters 2–3
 
-Build enough content to validate pacing and chapter structure before producing all remaining chapters.
+Build enough content to validate chapter pacing before producing all remaining chapters.
 
 Focus:
 
-- Chapter 2: defense / threat response
-- Chapter 3: resource / timing
+- defense / threat response;
+- resource conversion / spatial control;
+- teaching through play rather than text walls;
+- Easy/Normal placement.
 
-Use staging to answer:
+Use staging to decide whether the assumed encounter count per chapter is appropriate.
 
-- are six encounters per chapter too many or too few?
-- are teaching concepts visible without tutorials becoming walls of text?
-- does Normal difficulty belong only at mastery/boss points or more broadly?
-
-**Exit:** first half of Story has coherent pacing.
+**Exit:** first half of Story has coherent pacing and no content-schema blocker.
 
 ---
 
 ## R3.4 — Chapters 4–6
 
-Produce the remaining content only after the Chapter 2–3 structure is validated.
+Complete the remaining content only after Chapters 2–3 validate the structure.
 
 Focus:
 
-- Chapter 4: disruption
-- Chapter 5: formation
-- Chapter 6: mixed mastery
+- disruption;
+- matchup adaptation;
+- mixed mastery;
+- boss/mastery encounters.
 
 **Exit:** a clean profile can reach the ending through normal progression.
 
 ---
 
-## R3.5 — Story / Easy-Normal balance pass
+## R3.5 — Story / Easy-Normal Balance Pass
 
-Tune encounter policy and CPU profile after the complete content graph exists.
+Tune after the complete content graph exists.
 
-Balance targets should consider:
+Track:
 
-- fail rate
-- turn count
-- repeated failures
-- boss spikes
-- hero matchup pressure
+- fail rate;
+- turn count;
+- repeated failure points;
+- boss spikes;
+- hero matchup pressure.
 
-Avoid creating Hard+ during this pass.
+Do not create Hard+ during this pass.
 
 ---
 
 # R4 — Progression Complete
 
-## R4.1 — Reward economy specification + implementation
+## R4.1 — Reward Economy
 
-First define reward policy before adding numbers to UI.
+Define before implementing UI numbers:
 
-Specify:
+- Soul source/sinks;
+- Skill Fragment source/sinks;
+- first-clear / repeat-clear rewards;
+- chapter/boss rewards;
+- unlock costs/conditions.
 
-- Soul source/sinks
-- Skill Fragment source/sinks
-- first-clear rewards
-- repeat-clear rewards
-- chapter/boss rewards
-- unlock costs / conditions
+Then implement idempotent settlement through profile boundaries.
 
-Then implement result settlement through profile boundaries.
+## R4.2 — Hero Unlock Loop
 
-**Exit:** reward values have an explicit design rationale and are persisted idempotently.
-
----
-
-## R4.2 — Hero unlock loop
-
-Connect Story/rewards to hero availability.
+Connect Story/rewards to active hero availability.
 
 Requirements:
 
-- understandable unlock path
-- no hidden impossible state
-- Free Battle respects ownership
-- profile normalization preserves valid unlocks
-
----
+- understandable unlock path;
+- no impossible state;
+- Free Battle respects ownership;
+- normalization preserves valid active unlocks and removes retired IDs.
 
 ## R4.3 — Hero Archive
 
-Replace the placeholder Heroes screen.
+Replace the placeholder Heroes screen with:
 
-Minimum surface:
+- identity / engine;
+- passive;
+- abilities;
+- economy/readiness explanation;
+- unlock state;
+- mastery/sidegrade visibility.
 
-- hero identity
-- role / engine
-- passive
-- abilities
-- readiness/economy explanation
-- unlocked/locked state
-- mastery/sidegrade status
+## R4.4 — Skill Fragment Sidegrades
 
-Keep it tactical and concise rather than inventory-like.
+Introduce breadth only after the active hero baseline is stable.
 
----
-
-## R4.4 — Skill Fragment sidegrades
-
-Introduce breadth only after the core five-hero roster is stable.
-
-Preferred outcomes:
-
-- alternate loadout choices
-- different tactical approach
-- no mandatory percentage-stat grind
-
-**Exit:** progression changes available decisions rather than simply making old decisions numerically stronger.
+Preferred outcome: alternate tactical choices, not percentage-stat grind.
 
 ---
 
 # R5 — Game Feel Complete
 
-## R5.1 — Tactical motion system
+## R5.1 — Tactical Motion
 
-Create a small motion vocabulary shared by presentation components.
+Create a small shared motion vocabulary for:
 
-Priority:
+- stone placement;
+- source/target selection;
+- CPU turn handoff;
+- ability resolve;
+- board-effect appear/expire;
+- result transition.
 
-- stone placement
-- selected target/source
-- CPU turn handoff
-- ability resolve
-- board-effect appear/expire
-- result transition
+## R5.2 — Audio Foundation
 
-Do not create a general-purpose animation framework beyond what these interactions need.
+Add an autoplay-safe audio boundary and a minimal sound set for stone, invalid action, ability, and result events.
 
----
+## R5.3 — Haptics / Mobile Feedback
 
-## R5.2 — Audio foundation
+Capability-detected only; never required for understanding gameplay.
 
-Add an audio service under `platform/` and a minimal sound set.
+## R5.4 — Battle / Result Polish
 
-Requirements:
-
-- browser autoplay-safe initialization
-- mute/settings-ready boundary
-- player/CPU stone distinction if useful
-- invalid action
-- ability resolve/readiness
-- result sounds
-
----
-
-## R5.3 — Haptics + mobile feedback
-
-Add capability-detected haptic feedback where supported.
-
-Never make haptics necessary to understand gameplay.
-
----
-
-## R5.4 — Battle/result polish pass
-
-Integrate motion/audio/haptics into one staging feel pass.
-
-Check:
-
-- no feedback obscures board state;
-- no animation blocks input longer than intended;
-- CPU cadence still feels natural;
-- result actions remain immediate and clear.
+Integrate motion/audio/haptics without obscuring board state or weakening the fixed turn cadence.
 
 ---
 
 # R6 — Closed Beta
 
-## R6.1 — Diagnostics / analytics contract
-
-Define event schema before selecting or expanding analytics infrastructure.
+## R6.1 — Diagnostics / Analytics Contract
 
 Minimum dimensions:
 
-- build/version
-- mode
-- encounter
-- hero matchup
-- difficulty
-- turn count
-- duration
-- action type
-- ability id
-- result
+- build/version;
+- mode / encounter;
+- hero matchup;
+- difficulty;
+- turn count / duration;
+- action type / ability id;
+- result.
 
-Avoid sending unnecessary personal data.
+Avoid unnecessary personal data.
 
----
+## R6.2 — Save Migration / Recovery
 
-## R6.2 — Save migration / recovery
+- versioned migrations;
+- corrupted-save fallback;
+- reset profile;
+- safe defaults;
+- diagnostics/export snapshot;
+- old-profile fixtures, including retired hero IDs.
 
-Required before wider testing:
+## R6.3 — Closed Beta Run
 
-- versioned migrations
-- corrupted save fallback
-- reset profile
-- safe defaults
-- debug/export snapshot
+Collect comprehension, Story churn, hero preference, ability usage, difficulty, device/browser failures, and qualitative “why did this happen?” feedback.
 
-Add migration tests using old fixture shapes.
+## R6.4 — Beta Balance + UX
 
----
-
-## R6.3 — Closed beta run
-
-Start with a small controlled group.
-
-Collect:
-
-- comprehension issues
-- Story churn points
-- hero preference
-- ability usage
-- difficulty outliers
-- device/browser failures
-- qualitative “why did this happen?” feedback
-
----
-
-## R6.4 — Beta balance + UX pass
-
-Prioritize fixes by observed player friction rather than feature requests alone.
-
-A requested feature should not automatically enter v1 if the underlying problem can be solved by better readability, pacing, or content tuning.
+Prioritize observed friction over feature-request volume.
 
 ---
 
 # R7 — Release Candidate
 
-## R7.1 — Browser/performance QA
+## R7.1 — Browser / Performance QA
 
-Validate agreed supported matrix and long-session behavior.
+Validate boot, renderer fallback, resize/safe-area, repeated rematches, memory growth, background/resume, and save persistence.
 
-Check:
+## R7.2 — Accessibility / Settings Minimum
 
-- boot time
-- renderer fallback
-- resize/safe area
-- repeated rematches
-- memory growth
-- background/resume
-- save persistence
+Finalize required audio, reduced-motion, contrast, non-color-only states, and reset/diagnostics controls from beta evidence.
 
----
+## R7.3 — Content Freeze
 
-## R7.2 — Accessibility / settings minimum
+Lock the approved active hero roster, ability set, Story chapters, progression rules, and UI structure.
 
-Based on beta findings, finalize required controls such as:
+Do not hard-code a five-hero freeze; the approved roster is whatever passes the R3 product gate.
 
-- audio mute/level
-- reduced motion if needed
-- readable state contrast
-- non-color-only critical states
-- reset data / diagnostics access
-
----
-
-## R7.3 — Content freeze
-
-Lock:
-
-- five heroes
-- ability set
-- Story chapters
-- progression rules
-- UI structure
-
-After this point, new ideas go to post-launch backlog unless they solve a release blocker.
-
----
-
-## R7.4 — RC release procedure
-
-Suggested promotion sequence:
+## R7.4 — RC Promotion
 
 ```text
 main
@@ -612,95 +346,52 @@ main
 → v1.0.0
 ```
 
-Required artifacts/process:
-
-- release notes
-- build SHA/version
-- rollback path
-- known issues list
-- migration confirmation
-- production smoke checklist
-
 ---
 
 # R8 — v1.0 Production
 
-## Launch checklist
+Launch gate:
 
-- v1 scope matches roadmap lock
-- CI green
-- staging smoke green
-- supported device/browser matrix green
-- save migration green
-- production build/base verification green
-- production deploy green
-- production browser smoke green
-- no open P0
-- accepted P1 list empty
-- release notes published
-
-After launch, use observed behavior to choose post-launch work.
+- scope matches roadmap lock;
+- CI green;
+- staging/device matrix green;
+- save migration green;
+- production build/deploy/browser smoke green;
+- no open P0;
+- accepted P1 list empty;
+- release notes published.
 
 ---
 
-# Cross-cutting workstreams
-
-These are not separate milestones; they support the active milestone only when needed.
+# Cross-cutting rules
 
 ## Design System
 
-Add components only when repeated product patterns exist.
-
-Likely additions over time:
-
-- disabled action state
-- segmented selector
-- selection card
-- ability button
-- economy meter
-- turn indicator
-- modal/sheet
-
-Avoid building a complete abstract component library in advance.
+Extend existing tokens/components only when repeated product patterns justify it. Do not create screen-specific visual rules when the existing system can express the interaction.
 
 ## Content tooling
 
-Prefer typed content definitions and validation before building a visual editor.
-
-A content editor is justified only when hand-authored typed content becomes a measurable bottleneck.
+Prefer typed content definitions and validation before building visual editors.
 
 ## Performance
 
-Profile before optimizing. Primary risks are likely renderer/device behavior and presentation churn, not pure board-rule computation.
+Profile before optimizing.
 
-## Security / backend
+## Backend
 
-No backend exists in v1 scope. Do not introduce account/security architecture without a product requirement.
+No backend exists in v1 scope; do not introduce account/security architecture without a product requirement.
 
----
+## PR sizing
 
-# Recommended PR sizing
+Default to one product behavior or architecture boundary per PR, with tests and staging-visible validation included when applicable.
 
-Default target:
+## New-idea filter
 
-- one product behavior or architecture boundary per PR;
-- tests included in the same PR;
-- staging-visible changes easy to explain and verify;
-- avoid PRs that simultaneously touch combat rules, progression economy, major presentation redesign, and deployment.
+Ask:
 
-If a slice grows beyond a clear review narrative, split it by dependency rather than by arbitrary file count.
+1. Does it block the active milestone?
+2. Does it fix a P0/P1 problem?
+3. Does it strengthen RENZU's board + hero identity?
+4. Can it wait without creating rework?
 
----
-
-# Decision rules for new ideas
-
-When a new feature appears during development, classify it with these questions:
-
-1. Does it block the active milestone exit criteria?
-2. Does it fix a P0/P1 staging/beta problem?
-3. Does it strengthen RENZU's core board + hero identity?
-4. Can it be postponed without creating rework?
-
-If the answer to 1 and 2 is no, it normally belongs in a later milestone or post-launch backlog.
-
-This rule is intended to protect the path to a complete v1 rather than suppress experimentation.
+If 1 and 2 are both no, it normally belongs later.
