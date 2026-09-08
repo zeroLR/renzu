@@ -2,7 +2,9 @@
 
 ## Product boundary
 
-RENZU is a standalone hero-based tactical board strategy game. Board decisions remain authoritative; hero systems manipulate board state, action timing, or tactical opportunity rather than replacing the board with a separate HP/ATK combat model.
+RENZU is a standalone hero-based tactical board strategy game. Board decisions remain authoritative; active hero systems manipulate board state, economy, targeting, and temporary effects without replacing the board with a separate HP/ATK combat model.
+
+The current product baseline deliberately keeps **turn topology fixed across heroes**.
 
 ## Target module map
 
@@ -12,7 +14,7 @@ src/
 ├─ game/
 │  ├─ board/         # board representation and line/win rules
 │  ├─ match/         # match lifecycle and turn state
-│  ├─ action/        # action resolution and timing
+│  ├─ action/        # legal actions and action resolution
 │  └─ rules/         # reusable tactical rules
 ├─ heroes/
 │  ├─ domain/
@@ -40,6 +42,46 @@ src/
 5. `platform/` owns storage, analytics, environment, and other browser/service integration.
 6. `app/` composes modules and owns bootstrap/navigation orchestration.
 
+## Fixed-turn topology contract
+
+The active R3 baseline has one logical turn contract for every hero:
+
+```text
+Player Action
+  ↓
+Board / Ability Resolution
+  ↓
+Passive / Economy / Board Effects
+  ↓
+Turn Handoff
+  ↓
+CPU Thinking
+  ↓
+CPU Action
+  ↓
+Board / Ability Resolution
+  ↓
+Passive / Economy / Board Effects
+  ↓
+Turn Handoff
+  ↓
+Player
+```
+
+`LegalAction` is intentionally limited to placement and ability actions. Every legal action resolves the acting side's logical turn.
+
+The active runtime does not contain:
+
+- precommit phases;
+- triggered follow-up phases;
+- after-step phases;
+- chained same-turn hero actions;
+- an explicit `END TURN` action used to escape a hero-specific phase.
+
+Hero differentiation should first come from board manipulation, economy/readiness, passive outcomes, targeting rules, and temporary board effects.
+
+A future hero may change turn topology only after the fixed-turn baseline has been validated and the product benefit clearly justifies the additional rules, AI, UI/UX, and regression complexity. This is a deliberate product decision, not an extension point that every hero is expected to use.
+
 ## Placement pattern / passive contract
 
 Meaningful placement outcomes are evaluated once through `game/rules` and then consumed by hero passives. Hero implementations must not independently rescan the board for the same placement facts.
@@ -59,16 +101,28 @@ Hero Passive Engine
   ↓
 PassiveOutcome
   ↓
-Session materializes economy / board effects / follow-up timing
+Session materializes economy / board effects
+  ↓
+Turn Handoff
 ```
 
-The v1 pattern reward follows the validated prototype rule: only lines crossing the newly placed stone qualify; an exact three contributes 1, an exact four contributes 2, qualifying directions accumulate, and a winning five does not grant an additional pattern reward.
+The pattern reward follows the validated prototype rule: only lines crossing the newly placed stone qualify; an exact three contributes 1, an exact four contributes 2, qualifying directions accumulate, and a winning five does not grant an additional pattern reward.
 
 This boundary is shared by player and CPU session resolution so passive behavior remains deterministic regardless of presentation or controller path.
 
+## Active hero baseline
+
+R3.1 intentionally evaluates three hero engines before adding roster breadth:
+
+- **Vanguard** — cooldown / defense / protected topology;
+- **Arcanist** — Mana / spatial control;
+- **Shade** — Pressure / contact disruption.
+
+Architect and Swordmaster are not active runtime/content entities. Their previous formation and Step/Sever experiments remain useful design history, but they are not compatibility requirements for the current product.
+
 ## AI tactical evaluation contract
 
-AI must not implement a second copy of ability-resolution rules. Candidate actions come from the shared legal-action surface and tactical ability evaluation resolves one candidate against a cloned gameplay state through the same session resolver used by runtime play.
+AI must not implement a second copy of ability-resolution rules. Candidate actions come from the shared legal-action surface and tactical evaluation resolves one candidate against a cloned gameplay state through the same session resolver used by runtime play.
 
 ```text
 AbilityActionState
@@ -92,33 +146,23 @@ Tactical outcome
 Difficulty-weighted ranking
 ```
 
-R2/v1 intentionally keeps this to one-action simulation. Difficulty changes candidate selection variance and weighting, not gameplay legality or resolver behavior. Deeper search is a later optimization only if playtesting demonstrates that one-action tactical awareness is insufficient.
+Because one legal action now equals one logical turn, `resolveCpuTurn()` and one-action tactical simulation share the same unit of work. Difficulty changes candidate selection variance and weighting, not gameplay legality or resolver behavior. Deeper search is a later optimization only if playtesting demonstrates that one-action tactical awareness is insufficient.
 
 ## Migration policy
 
-The legacy `gomoku-rpg` implementation is a behavior reference, not a target folder structure. Migration happens incrementally:
-
-```mermaid
-flowchart LR
-  A[Board Rules] --> B[Match State]
-  B --> C[Action Resolution]
-  C --> D[Hero Ability Economy]
-  D --> E[AI]
-  E --> F[Progression / Modes]
-  F --> G[Presentation Rebuild]
-```
+The legacy `gomoku-rpg` implementation is a behavior and design reference, not a target folder structure or compatibility contract.
 
 For each slice:
 
-- preserve validated gameplay behavior unless explicitly redesigned;
+- preserve validated gameplay behavior unless it is explicitly redesigned;
 - add characterization tests before or with extraction;
-- remove obsolete compatibility glue when the new domain boundary makes it unnecessary;
-- do not copy the legacy `main.ts` orchestration model;
+- remove obsolete compatibility glue when the product decision makes it unnecessary;
+- do not copy legacy orchestration merely because the prototype supported it;
 - keep the branch buildable and testable.
 
 ## Renderer bootstrap contract
 
-The legacy prototype experienced a production blank-screen failure where assets loaded but no canvas was mounted. RENZU therefore keeps these constraints from day one:
+The legacy prototype experienced a production blank-screen failure where assets loaded but no canvas was mounted. RENZU therefore keeps these constraints:
 
 - resolve `#app` explicitly;
 - renderer initialization has a finite timeout;
@@ -129,9 +173,7 @@ The legacy prototype experienced a production blank-screen failure where assets 
 
 ## Hosting contract
 
-RENZU uses GitHub Pages as its production hosting platform, continuing the deployment technology validated by the `gomoku-rpg` prototype.
-
-Because `zeroLR/renzu` is a GitHub Project Pages repository, deployed assets must not assume `/` hosting.
+RENZU uses GitHub Pages for staging and production.
 
 Canonical paths:
 
@@ -139,41 +181,34 @@ Canonical paths:
 - production: `/renzu/`
 - staging: `/renzu/staging/`
 
-Vite derives its `base` from `RENZU_DEPLOY_TARGET` so staging and production builds emit correct asset URLs.
-
-The deployment infrastructure should preserve both environments in one Pages site rather than treating every deployment as a destructive replacement. This follows the useful part of the legacy playground `pages-state` model while removing its multi-game complexity.
-
-Target site state:
+Vite derives its `base` from `RENZU_DEPLOY_TARGET`. Staging and production must be preserved independently within the same Pages site.
 
 ```text
 site/
-├─ index.html            # production RENZU
-├─ assets/               # production assets
+├─ index.html
+├─ assets/
 └─ staging/
-   ├─ index.html         # staging RENZU
-   └─ assets/            # staging assets
+   ├─ index.html
+   └─ assets/
 ```
 
 ## Release flow
 
-```mermaid
-flowchart LR
-  A[Feature PR] --> B[CI]
-  B --> C[main]
-  C --> D[Build Staging]
-  D --> E[Publish /renzu/staging/]
-  E --> F[Release Tag]
-  F --> G[Build Production]
-  G --> H[Publish /renzu/]
+```text
+Feature PR
+→ CI
+→ main
+→ staging
+→ device/browser validation
+→ release tag
+→ production
 ```
 
 Rules:
 
-1. Pull requests validate tests and production compilation but do not deploy.
+1. Pull requests validate tests and target compilation but do not deploy.
 2. `main` is the staging source and should remain deployable.
 3. A versioned release/tag promotes a tested revision to production.
 4. Staging publication must not overwrite production state.
 5. Production publication must not remove staging state.
 6. GitHub Pages asset paths must be smoke-tested from the deployed URL, not only from local Vite preview.
-
-The actual Pages workflow is implemented as a dedicated infrastructure slice after the standalone foundation is merged.
