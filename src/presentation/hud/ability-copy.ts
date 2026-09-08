@@ -8,10 +8,6 @@ const abilityHelp: Record<AbilityId, string> = {
   seal: 'BLOCK AN EMPTY POINT TEMPORARILY',
   phase: 'PLACE + FLAME THE FOUR CARDINAL POINTS',
   corrupt: 'REMOVE A SUPPORTED ADJACENT ENEMY',
-  rally: 'MOVE AN ALLY INTO A SUPPORTED FORMATION',
-  lattice: 'SEAL CARDINAL POINTS AROUND A FORMATION',
-  step: 'PRESERVE MOMENTUM ON YOUR NEXT PLACEMENT',
-  sever: 'PUSH AN ADJACENT UNGUARDED ENEMY ONE POINT',
 };
 
 export function abilityHelpText(abilityId: AbilityId): string {
