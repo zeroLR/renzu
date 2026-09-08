@@ -1,6 +1,7 @@
 import { createRenderer } from './app/bootstrap/create-renderer';
 import { createProductFlow } from './app/game-session/product-flow';
 import { createAppRouter } from './app/routing/router';
+import { heroRosterValidationEnabled } from './platform/environment/runtime-environment';
 import { createBrowserPlayerProfileStorage } from './platform/storage/player-profile-storage';
 import { createProductShell } from './presentation/screens/product-shell';
 import './style.css';
@@ -23,7 +24,9 @@ async function bootstrap(): Promise<void> {
     const app = await createRenderer();
     const router = createAppRouter();
     const profileStorage = createBrowserPlayerProfileStorage();
-    const flow = createProductFlow(profileStorage);
+    const flow = createProductFlow(profileStorage, {
+      allowLockedFreeBattleHeroes: heroRosterValidationEnabled(),
+    });
     const shell = createProductShell(router, flow);
 
     app.stage.addChild(shell.root);
