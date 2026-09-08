@@ -23,7 +23,6 @@ export interface BattleTargetingState {
 
 export interface CpuChoreographyOptions {
   thinkDelayMs?: number;
-  followUpDelayMs?: number;
   delay?: (ms: number) => Promise<void>;
 }
 
@@ -34,19 +33,12 @@ export interface BattleController {
   legalActions(): LegalAction[];
   selectAbility(abilityId: AbilityId): void;
   tapCell(at: Position): void;
-  endFollowUp(): void;
   advanceCpuTurn(onStep?: () => void, options?: CpuChoreographyOptions): Promise<void>;
   clearSelection(): void;
 }
 
 const samePosition = (a: Position | undefined, b: Position): boolean => !!a && a.row === b.row && a.col === b.col;
 const defaultDelay = (ms: number): Promise<void> => new Promise((resolve) => globalThis.setTimeout(resolve, ms));
-
-function abilityFrom(action: LegalAction): AbilityAction | null {
-  if (action.kind === 'ability') return action;
-  if (action.kind === 'follow-up' && action.action.kind === 'ability') return action.action;
-  return null;
-}
 
 function uniquePositions(positions: readonly Position[]): Position[] {
   const seen = new Set<string>();
@@ -74,9 +66,9 @@ export function createBattleController(session: GameSession, random?: () => numb
       return { abilityId: null, phase: 'idle', sources: [], targets: [] };
     }
 
-    const candidates = legalActions()
-      .map(abilityFrom)
-      .filter((action): action is AbilityAction => action?.abilityId === selectedAbilityId);
+    const candidates = legalActions().filter(
+      (action): action is AbilityAction => action.kind === 'ability' && action.abilityId === selectedAbilityId,
+    );
     const sourced = candidates.filter((action) => action.source !== undefined);
 
     if (sourced.length > 0) {
@@ -119,28 +111,21 @@ export function createBattleController(session: GameSession, random?: () => numb
     const sequence = ++cpuSequence;
     const delay = options.delay ?? defaultDelay;
     const thinkDelayMs = options.thinkDelayMs ?? 520;
-    const followUpDelayMs = options.followUpDelayMs ?? 280;
     onStep?.();
 
-    let guard = 0;
-    while (sequence === cpuSequence && session.state.match.status === 'playing' && session.state.match.phase === 'opponent' && guard < 4) {
-      await delay(guard === 0 ? thinkDelayMs : followUpDelayMs);
-      if (sequence !== cpuSequence) break;
+    await delay(thinkDelayMs);
+    if (sequence !== cpuSequence) return;
 
-      const result: CpuTurnResult = resolveCpuTurn(session.state, {
-        heroId: session.config.cpuHeroId,
-        difficulty: session.config.cpuDifficulty,
-        random,
-      });
-      if (!result.ok) {
-        lastError = result.error;
-        break;
-      }
-
+    const result: CpuTurnResult = resolveCpuTurn(session.state, {
+      heroId: session.config.cpuHeroId,
+      difficulty: session.config.cpuDifficulty,
+      random,
+    });
+    if (!result.ok) {
+      lastError = result.error;
+    } else {
       session.state = result.state;
       lastError = null;
-      guard += 1;
-      onStep?.();
     }
 
     if (sequence === cpuSequence) {
@@ -162,7 +147,9 @@ export function createBattleController(session: GameSession, random?: () => numb
   };
 
   const selectAbility = (abilityId: AbilityId): void => {
-    const candidates = legalActions().filter((action) => abilityFrom(action)?.abilityId === abilityId);
+    const candidates = legalActions().filter(
+      (action): action is AbilityAction => action.kind === 'ability' && action.abilityId === abilityId,
+    );
     if (candidates.length === 0) {
       lastError = 'ability-unavailable';
       return;
@@ -170,8 +157,6 @@ export function createBattleController(session: GameSession, random?: () => numb
     selectedAbilityId = abilityId;
     selectedSource = null;
     lastError = null;
-
-    if (abilityId === 'step') apply(candidates[0]);
   };
 
   const tapCell = (at: Position): void => {
@@ -179,21 +164,19 @@ export function createBattleController(session: GameSession, random?: () => numb
     const actions = legalActions();
 
     if (!selectedAbilityId) {
-      const direct = actions.find((action) => {
-        if (action.kind === 'place') return samePosition(action.at, at);
-        if (action.kind === 'follow-up' && action.action.kind === 'place') return samePosition(action.action.at, at);
-        return false;
-      });
+      const direct = actions.find((action) => action.kind === 'place' && samePosition(action.at, at));
       if (direct) apply(direct);
       else lastError = 'invalid-target';
       return;
     }
 
-    const candidates = actions.filter((action) => abilityFrom(action)?.abilityId === selectedAbilityId);
-    const needsSource = candidates.some((action) => abilityFrom(action)?.source !== undefined);
+    const candidates = actions.filter(
+      (action): action is AbilityAction => action.kind === 'ability' && action.abilityId === selectedAbilityId,
+    );
+    const needsSource = candidates.some((action) => action.source !== undefined);
 
     if (needsSource && !selectedSource) {
-      if (candidates.some((action) => samePosition(abilityFrom(action)?.source, at))) {
+      if (candidates.some((action) => samePosition(action.source, at))) {
         selectedSource = at;
         lastError = null;
       } else {
@@ -202,12 +185,9 @@ export function createBattleController(session: GameSession, random?: () => numb
       return;
     }
 
-    const match = candidates.find((action) => {
-      const ability = abilityFrom(action);
-      return ability
-        ? samePosition(ability.target, at) && (!needsSource || samePosition(ability.source, selectedSource!))
-        : false;
-    });
+    const match = candidates.find((action) =>
+      samePosition(action.target, at) && (!needsSource || samePosition(action.source, selectedSource!)),
+    );
     if (match) apply(match);
     else lastError = 'invalid-target';
   };
@@ -219,11 +199,6 @@ export function createBattleController(session: GameSession, random?: () => numb
     legalActions,
     selectAbility,
     tapCell,
-    endFollowUp() {
-      const end = legalActions().find((action) => action.kind === 'end-follow-up');
-      if (end) apply(end);
-      else lastError = 'follow-up-unavailable';
-    },
     advanceCpuTurn,
     clearSelection() {
       selectedAbilityId = null;
