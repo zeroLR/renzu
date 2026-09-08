@@ -28,14 +28,14 @@ describe('mode configuration', () => {
     });
   });
 
-  it('allows an explicit validation policy without changing profile ownership', () => {
+  it('allows active locked heroes under an explicit validation policy without changing profile ownership', () => {
     const profile = createPlayerProfile();
     expect(createFreeBattleSessionConfig(
       profile,
-      { playerHeroId: 'swordmaster', cpuHeroId: 'architect', cpuDifficulty: 'normal' },
+      { playerHeroId: 'arcanist', cpuHeroId: 'shade', cpuDifficulty: 'normal' },
       { allowLockedPlayerHeroes: true },
     )).toEqual({
-      mode: 'free-battle', playerHeroId: 'swordmaster', cpuHeroId: 'architect', cpuDifficulty: 'normal',
+      mode: 'free-battle', playerHeroId: 'arcanist', cpuHeroId: 'shade', cpuDifficulty: 'normal',
     });
     expect(profile.unlockedHeroes).toEqual(['vanguard']);
   });
