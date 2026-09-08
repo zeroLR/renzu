@@ -43,16 +43,14 @@ function cloneState(state: AbilityActionState): AbilityActionState {
     match: {
       ...state.match,
       board: state.match.board.map((row) => [...row]),
-      actionHistory: state.match.actionHistory.map((action) => ({ ...action, at: { ...action.at }, source: action.source ? { ...action.source } : undefined })),
+      actionHistory: state.match.actionHistory.map((action) => ({
+        ...action,
+        at: { ...action.at },
+        source: action.source ? { ...action.source } : undefined,
+      })),
     },
     abilities: cloneAbilities(state.abilities),
     boardEffects: state.boardEffects.map((effect) => ({ ...effect, at: { ...effect.at }, expiry: { ...effect.expiry } })),
-    timing: state.timing
-      ? {
-          ...state.timing,
-          pendingFollowUp: state.timing.pendingFollowUp ? { ...state.timing.pendingFollowUp } : null,
-        }
-      : undefined,
   };
 }
 
