@@ -8,18 +8,9 @@ import {
   type BoardEffect,
 } from '../combat/board-effects';
 import {
-  abilityConsumesTurn,
-  beginAbilityTiming,
-  clearFollowUp,
-  createActionTimingState,
-  type AbilityActionTiming,
-  type ActionTimingState,
-} from './action-timing';
-import {
   advanceAbilityEconomyAfterTurn,
   canActivate,
   consumeActivation,
-  setAbilityCondition,
   type AbilityActivationRule,
 } from '../../heroes/economies/ability-economy';
 import type { AbilityStates } from '../../heroes/economies/ability-state';
@@ -30,7 +21,6 @@ export interface AbilityActionState {
   match: MatchState;
   abilities: AbilityStates;
   boardEffects: readonly BoardEffect[];
-  timing?: ActionTimingState;
 }
 
 export interface AbilityIntent {
@@ -39,7 +29,6 @@ export interface AbilityIntent {
   actor: Player;
   target: Position;
   source?: Position;
-  followUp?: boolean;
 }
 
 export type AbilityActionError =
@@ -47,11 +36,10 @@ export type AbilityActionError =
   | 'wrong-phase'
   | 'ability-unavailable'
   | 'activation-unavailable'
-  | 'follow-up-unavailable'
   | 'invalid-target';
 
 export type AbilityActionResult =
-  | { ok: true; state: AbilityActionState; consumedTurn: boolean; passive: PassiveOutcome; timing: AbilityActionTiming }
+  | { ok: true; state: AbilityActionState; consumedTurn: true; passive: PassiveOutcome }
   | { ok: false; state: AbilityActionState; consumedTurn: false; error: AbilityActionError };
 
 const DEFAULT_ACTIVATIONS: Partial<Record<AbilityId, AbilityActivationRule>> = {
@@ -62,24 +50,10 @@ const DEFAULT_ACTIVATIONS: Partial<Record<AbilityId, AbilityActivationRule>> = {
   charge: { kind: 'resource', resourceId: 'mana', amount: 3 },
   bulwark: { kind: 'resource', resourceId: 'mana', amount: 3 },
   phase: { kind: 'resource', resourceId: 'mana', amount: 3 },
-  rally: { kind: 'resource', resourceId: 'mana', amount: 2 },
-  lattice: { kind: 'resource', resourceId: 'mana', amount: 3 },
-  step: { kind: 'charge', amount: 1 },
-  sever: { kind: 'resource', resourceId: 'momentum', amount: 3 },
 };
-
-function actionTiming(abilityId: AbilityId): AbilityActionTiming {
-  if (abilityId === 'step') return 'precommit-follow-up';
-  if (abilityId === 'sever') return 'triggered-follow-up';
-  return 'standard';
-}
 
 function cloneBoard(board: Board): Board {
   return board.map((row) => [...row]);
-}
-
-function samePosition(a: Position, b: Position): boolean {
-  return a.row === b.row && a.col === b.col;
 }
 
 function adjacent(a: Position, b: Position): boolean {
@@ -102,11 +76,7 @@ function hasAdjacentFriendly(board: Board, at: Position, actor: Player): boolean
   return adjacentFriendlyPositions(board, at, actor).length > 0;
 }
 
-function rallySupportCount(board: Board, target: Position, source: Position, actor: Player): number {
-  return adjacentFriendlyPositions(board, target, actor).filter((position) => !samePosition(position, source)).length;
-}
-
-function latticeCells(board: Board, effects: readonly BoardEffect[], target: Position): Position[] {
+function cardinalOpenCells(board: Board, effects: readonly BoardEffect[], target: Position): Position[] {
   return ([[-1, 0], [1, 0], [0, -1], [0, 1]] as const)
     .map(([dr, dc]) => ({ row: target.row + dr, col: target.col + dc }))
     .filter((position) =>
@@ -114,57 +84,6 @@ function latticeCells(board: Board, effects: readonly BoardEffect[], target: Pos
       && board[position.row][position.col] === 0
       && !isBlocked(effects, position),
     );
-}
-
-function boardPositions(board: Board): Position[] {
-  return board.flatMap((row, rowIndex) => row.map((_, colIndex) => ({ row: rowIndex, col: colIndex })));
-}
-
-function hasFormationAnchor(state: AbilityActionState, actor: Player): boolean {
-  return boardPositions(state.match.board).some((position) =>
-    state.match.board[position.row][position.col] === actor
-    && adjacentFriendlyPositions(state.match.board, position, actor).length >= 2,
-  );
-}
-
-function hasRallyOpportunity(state: AbilityActionState, actor: Player): boolean {
-  const board = state.match.board;
-  const positions = boardPositions(board);
-  return positions.some((source) => {
-    if (board[source.row][source.col] !== actor || isGuarded(state.boardEffects, source)) return false;
-    return positions.some((target) =>
-      board[target.row][target.col] === 0
-      && !isBlocked(state.boardEffects, target)
-      && rallySupportCount(board, target, source, actor) >= 2,
-    );
-  });
-}
-
-function hasLatticeOpportunity(state: AbilityActionState, actor: Player): boolean {
-  const board = state.match.board;
-  return boardPositions(board).some((target) =>
-    board[target.row][target.col] === actor
-    && adjacentFriendlyPositions(board, target, actor).length >= 2
-    && latticeCells(board, state.boardEffects, target).length > 0,
-  );
-}
-
-function prepareConditionalActivation(
-  state: AbilityActionState,
-  intent: AbilityIntent,
-  activation: AbilityActivationRule,
-): AbilityActionState {
-  if (activation.kind !== 'condition' || intent.heroId !== 'architect') return state;
-
-  let ready = false;
-  if (intent.abilityId === 'rally') ready = hasRallyOpportunity(state, intent.actor);
-  else if (intent.abilityId === 'lattice') ready = hasLatticeOpportunity(state, intent.actor);
-  else ready = hasFormationAnchor(state, intent.actor);
-
-  return {
-    ...state,
-    abilities: setAbilityCondition(state.abilities, intent.actor, activation.conditionId, ready),
-  };
 }
 
 function resolveBoardMutation(state: AbilityActionState, intent: AbilityIntent): AbilityActionState | null {
@@ -187,8 +106,7 @@ function resolveBoardMutation(state: AbilityActionState, intent: AbilityIntent):
     if (board[target.row][target.col] !== actor || isGuarded(effects, target)) return null;
     const adjacentFriendly = adjacentFriendlyPositions(board, target, actor);
     if (adjacentFriendly.length === 0) return null;
-    const group = [target, ...adjacentFriendly];
-    for (const position of group) {
+    for (const position of [target, ...adjacentFriendly]) {
       if (!isGuarded(effects, position)) {
         effects.push(createBoardEffect('guard', position, actor, { kind: 'owner-turns', remaining: 2 }));
       }
@@ -219,30 +137,9 @@ function resolveBoardMutation(state: AbilityActionState, intent: AbilityIntent):
   } else if (abilityId === 'phase') {
     if (board[target.row][target.col] !== 0 || isBlocked(effects, target)) return null;
     board[target.row][target.col] = actor;
-    for (const position of latticeCells(board, effects, target)) {
+    for (const position of cardinalOpenCells(board, effects, target)) {
       effects.push(createBoardEffect('flame', position, actor, { kind: 'opponent-turns', remaining: 1 }));
     }
-  } else if (abilityId === 'rally') {
-    if (!source || !isInsideBoard(board, source.row, source.col) || board[source.row][source.col] !== actor || isGuarded(effects, source)) return null;
-    if (board[target.row][target.col] !== 0 || isBlocked(effects, target)) return null;
-    if (rallySupportCount(board, target, source, actor) < 2) return null;
-    board[source.row][source.col] = 0;
-    board[target.row][target.col] = actor;
-  } else if (abilityId === 'lattice') {
-    if (board[target.row][target.col] !== actor || adjacentFriendlyPositions(board, target, actor).length < 2) return null;
-    const cells = latticeCells(board, effects, target);
-    if (cells.length === 0) return null;
-    for (const position of cells) {
-      effects.push(createBoardEffect('seal', position, actor, { kind: 'opponent-turns', remaining: 1 }));
-    }
-  } else if (abilityId === 'step') {
-    return state;
-  } else if (abilityId === 'sever') {
-    if (!source || !isInsideBoard(board, source.row, source.col) || board[source.row][source.col] !== actor || board[target.row][target.col] !== enemy || !adjacent(source, target) || isGuarded(effects, target)) return null;
-    const pushed = { row: target.row + (target.row - source.row), col: target.col + (target.col - source.col) };
-    if (!isInsideBoard(board, pushed.row, pushed.col) || board[pushed.row][pushed.col] !== 0 || isBlocked(effects, pushed)) return null;
-    board[pushed.row][pushed.col] = enemy;
-    board[target.row][target.col] = 0;
   } else {
     return null;
   }
@@ -255,74 +152,43 @@ export function resolveAbilityAction(state: AbilityActionState, intent: AbilityI
   if (activePlayer(state.match) !== intent.actor) return { ok: false, state, consumedTurn: false, error: 'wrong-phase' };
   if (!isAbilityAccessible(intent.heroId, intent.abilityId)) return { ok: false, state, consumedTurn: false, error: 'ability-unavailable' };
 
-  const timing = actionTiming(intent.abilityId);
-  const timingState = state.timing ?? createActionTimingState();
-  const pending = timingState.pendingFollowUp;
-  if (timing === 'triggered-follow-up') {
-    if (!pending || pending.actor !== intent.actor || pending.abilityId !== intent.abilityId || pending.kind !== 'triggered') {
-      return { ok: false, state, consumedTurn: false, error: 'follow-up-unavailable' };
-    }
-  }
-  if (intent.followUp) {
-    if (!pending || pending.actor !== intent.actor || pending.abilityId !== intent.abilityId) {
-      return { ok: false, state, consumedTurn: false, error: 'follow-up-unavailable' };
-    }
-  }
-
   const activation = heroes[intent.heroId].activationOverrides[intent.abilityId] ?? DEFAULT_ACTIVATIONS[intent.abilityId];
   if (!activation) return { ok: false, state, consumedTurn: false, error: 'activation-unavailable' };
-
-  const prepared = prepareConditionalActivation({ ...state, timing: timingState }, intent, activation);
-  if (!canActivate(prepared.abilities, intent.actor, activation, intent.abilityId).ready) {
+  if (!canActivate(state.abilities, intent.actor, activation, intent.abilityId).ready) {
     return { ok: false, state, consumedTurn: false, error: 'activation-unavailable' };
   }
 
-  const mutated = resolveBoardMutation(prepared, intent);
+  const mutated = resolveBoardMutation(state, intent);
   if (!mutated) return { ok: false, state, consumedTurn: false, error: 'invalid-target' };
 
-  const consumedTurn = abilityConsumesTurn(timing);
-  const advancedAbilities = consumedTurn
-    ? advanceAbilityEconomyAfterTurn(mutated.abilities, intent.actor)
-    : mutated.abilities;
-  const consumedAbilities = intent.abilityId === 'step'
-    ? advancedAbilities
-    : consumeActivation(advancedAbilities, intent.actor, activation, intent.abilityId);
+  const advancedAbilities = advanceAbilityEconomyAfterTurn(mutated.abilities, intent.actor);
+  const consumedAbilities = consumeActivation(advancedAbilities, intent.actor, activation, intent.abilityId);
   const passive = applyAfterAbilityPassive(consumedAbilities, intent.heroId, intent.actor);
-  let match = intent.abilityId === 'step'
-    ? mutated.match
-    : appendAction(mutated.match, {
-      actor: intent.actor,
-      kind: 'ability',
-      at: intent.target,
-      source: intent.source,
-      abilityId: intent.abilityId,
-    });
+  let match = appendAction(mutated.match, {
+    actor: intent.actor,
+    kind: 'ability',
+    at: intent.target,
+    source: intent.source,
+    abilityId: intent.abilityId,
+  });
 
-  if (intent.abilityId !== 'step') {
-    const boardChangedAtTarget = match.board[intent.target.row]?.[intent.target.col] === intent.actor;
-    if (boardChangedAtTarget && isWinningMove(match.board, intent.target, intent.actor)) {
-      match = endMatch(match, intent.actor === 1 ? 'victory' : 'defeat');
-    } else if (isBoardFull(match)) {
-      match = endMatch(match, 'draw');
-    }
+  const boardChangedAtTarget = match.board[intent.target.row]?.[intent.target.col] === intent.actor;
+  if (boardChangedAtTarget && isWinningMove(match.board, intent.target, intent.actor)) {
+    match = endMatch(match, intent.actor === 1 ? 'victory' : 'defeat');
+  } else if (isBoardFull(match)) {
+    match = endMatch(match, 'draw');
   }
 
-  let nextTiming = intent.followUp ? clearFollowUp(timingState) : beginAbilityTiming(timingState, intent.actor, intent.abilityId, timing);
   let boardEffects = mutated.boardEffects;
-
-  if (consumedTurn && match.status === 'playing') {
+  if (match.status === 'playing') {
     boardEffects = advanceBoardEffectsAfterTurn(boardEffects, intent.actor);
     match = completeTurn(match, intent.actor);
-    if (nextTiming.pendingFollowUp?.actor === intent.actor && timing === 'standard') {
-      nextTiming = clearFollowUp(nextTiming);
-    }
   }
 
   return {
     ok: true,
-    state: { ...mutated, match, abilities: passive.states, boardEffects, timing: nextTiming },
-    consumedTurn,
+    state: { ...mutated, match, abilities: passive.states, boardEffects },
+    consumedTurn: true,
     passive,
-    timing,
   };
 }
