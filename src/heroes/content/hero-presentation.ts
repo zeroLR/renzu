@@ -22,14 +22,4 @@ export const heroPresentation: Record<HeroId, HeroPresentationProfile> = {
     engineLabel: 'PRESSURE · DISRUPTION',
     battlePlan: 'PLAY CLOSE, BUILD PRESSURE, THEN BREAK KEY STONES.',
   },
-  architect: {
-    displayName: 'ARCHITECT',
-    engineLabel: 'FORMATION · CONTROL',
-    battlePlan: 'BUILD SUPPORT NETWORKS, THEN MOVE OR SEAL SPACE.',
-  },
-  swordmaster: {
-    displayName: 'SWORDMASTER',
-    engineLabel: 'MOMENTUM · OFFENSE',
-    battlePlan: 'CREATE PATTERNS, KEEP TEMPO, THEN STEP INTO SEVER.',
-  },
 };
