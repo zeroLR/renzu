@@ -27,4 +27,16 @@ describe('mode configuration', () => {
       mode: 'free-battle', playerHeroId: 'shade', cpuHeroId: 'vanguard', cpuDifficulty: 'normal',
     });
   });
+
+  it('allows an explicit validation policy without changing profile ownership', () => {
+    const profile = createPlayerProfile();
+    expect(createFreeBattleSessionConfig(
+      profile,
+      { playerHeroId: 'swordmaster', cpuHeroId: 'architect', cpuDifficulty: 'normal' },
+      { allowLockedPlayerHeroes: true },
+    )).toEqual({
+      mode: 'free-battle', playerHeroId: 'swordmaster', cpuHeroId: 'architect', cpuDifficulty: 'normal',
+    });
+    expect(profile.unlockedHeroes).toEqual(['vanguard']);
+  });
 });

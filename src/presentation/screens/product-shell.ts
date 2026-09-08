@@ -3,6 +3,7 @@ import type { ProductFlow } from '../../app/game-session/product-flow';
 import type { AppRoute, AppRouter } from '../../app/routing/router';
 import { actionButton, label, pageTitle, surface } from '../../design-system/components/primitives';
 import { color, layout, spacing, type } from '../../design-system/tokens/tokens';
+import { heroPresentation } from '../../heroes/content/hero-presentation';
 import { heroIds, type HeroId } from '../../heroes/domain/hero-definition';
 import { EASY_STORY_ENCOUNTERS, isStoryEncounterUnlocked } from '../../modes/story/story-content';
 import { renderBattleScreen } from './battle-screen';
@@ -13,7 +14,7 @@ export interface ProductShell {
   resize(width: number, height: number): void;
 }
 
-const heroLabel = (heroId: HeroId): string => heroId.toUpperCase();
+const heroLabel = (heroId: HeroId): string => heroPresentation[heroId].displayName;
 
 export function createProductShell(router: AppRouter, flow: ProductFlow): ProductShell {
   const viewport = new Container();
@@ -137,8 +138,31 @@ export function createProductShell(router: AppRouter, flow: ProductFlow): Produc
     content.addChild(titleNode);
     values.forEach((value, index) => {
       const allowed = enabled ? enabled(value) : true;
-      const button = actionButton(value.toUpperCase(), 104, 44, () => allowed && onSelect(value), selected === value && allowed);
+      const button = actionButton(value.toUpperCase(), 104, 48, () => allowed && onSelect(value), selected === value && allowed);
       button.position.set(layout.horizontalInset + index * 112, y + 24);
+      if (!allowed) button.alpha = 0.35;
+      content.addChild(button);
+    });
+  };
+
+  const selectorGrid = (
+    titleText: string,
+    values: readonly HeroId[],
+    selected: HeroId,
+    y: number,
+    onSelect: (value: HeroId) => void,
+    enabled?: (value: HeroId) => boolean,
+  ): void => {
+    const titleNode = label(titleText, type.caption, color.inkSoft, '700');
+    titleNode.position.set(layout.horizontalInset, y);
+    content.addChild(titleNode);
+
+    values.forEach((value, index) => {
+      const allowed = enabled ? enabled(value) : true;
+      const row = Math.floor(index / 3);
+      const column = index % 3;
+      const button = actionButton(heroLabel(value), 104, 48, () => allowed && onSelect(value), selected === value && allowed);
+      button.position.set(layout.horizontalInset + column * 112, y + 24 + row * 56);
       if (!allowed) button.alpha = 0.35;
       content.addChild(button);
     });
@@ -150,24 +174,50 @@ export function createProductShell(router: AppRouter, flow: ProductFlow): Produc
     const heading = pageTitle('FREE BATTLE', 'Match setup', 'Choose your engine, opponent and pressure level.');
     heading.position.set(layout.horizontalInset, 92);
     content.addChild(heading);
-    const owned = (value: string): boolean => snapshot.profile.unlockedHeroes.includes(value as HeroId);
-    selectorRow('YOUR HERO', heroIds.slice(0, 3), snapshot.freeBattle.playerHeroId, 206, (value) => { flow.selectPlayerHero(value as HeroId); render(); }, owned);
-    selectorRow('CPU HERO', heroIds.slice(0, 3), snapshot.freeBattle.cpuHeroId, 304, (value) => { flow.selectCpuHero(value as HeroId); render(); });
-    selectorRow('DIFFICULTY', ['easy', 'normal'], snapshot.freeBattle.cpuDifficulty, 402, (value) => { flow.selectDifficulty(value as 'easy' | 'normal'); render(); });
-    const summary = surface(layout.contentWidth, 132, true);
-    summary.position.set(layout.horizontalInset, 518);
-    const versus = label(`${heroLabel(snapshot.freeBattle.playerHeroId)}  VS  ${heroLabel(snapshot.freeBattle.cpuHeroId)}`, type.heading, color.ink, '700');
+
+    const selectable = new Set(snapshot.freeBattleAccess.playerHeroIds);
+    selectorGrid('YOUR HERO', heroIds, snapshot.freeBattle.playerHeroId, 188, (value) => {
+      flow.selectPlayerHero(value);
+      render();
+    }, (value) => selectable.has(value));
+
+    if (snapshot.freeBattleAccess.validationOverride) {
+      const validation = label('ROSTER VALIDATION', 10, color.violet, '700');
+      validation.anchor.set(1, 0);
+      validation.position.set(layout.referenceWidth - layout.horizontalInset, 188);
+      content.addChild(validation);
+    }
+
+    selectorGrid('CPU HERO', heroIds, snapshot.freeBattle.cpuHeroId, 326, (value) => {
+      flow.selectCpuHero(value);
+      render();
+    });
+    selectorRow('DIFFICULTY', ['easy', 'normal'], snapshot.freeBattle.cpuDifficulty, 464, (value) => {
+      flow.selectDifficulty(value as 'easy' | 'normal');
+      render();
+    });
+
+    const selectedHero = heroPresentation[snapshot.freeBattle.playerHeroId];
+    const summary = surface(layout.contentWidth, 116, true);
+    summary.position.set(layout.horizontalInset, 560);
+    const versus = label(`${selectedHero.displayName}  VS  ${heroLabel(snapshot.freeBattle.cpuHeroId)}`, type.heading, color.ink, '700');
     versus.anchor.set(0.5, 0);
-    versus.position.set(layout.referenceWidth / 2, 544);
-    const difficulty = label(`CPU · ${snapshot.freeBattle.cpuDifficulty.toUpperCase()}`, type.caption, color.gold, '700');
+    versus.position.set(layout.referenceWidth / 2, 578);
+    const engine = label(selectedHero.engineLabel, type.caption, color.gold, '700');
+    engine.anchor.set(0.5, 0);
+    engine.position.set(layout.referenceWidth / 2, 608);
+    const plan = label(selectedHero.battlePlan, 10, color.inkSoft, '500');
+    plan.anchor.set(0.5, 0);
+    plan.position.set(layout.referenceWidth / 2, 630);
+    const difficulty = label(`CPU · ${snapshot.freeBattle.cpuDifficulty.toUpperCase()}`, 10, color.muted, '700');
     difficulty.anchor.set(0.5, 0);
-    difficulty.position.set(layout.referenceWidth / 2, 580);
+    difficulty.position.set(layout.referenceWidth / 2, 650);
     const start = actionButton('START BATTLE', layout.contentWidth, 60, () => {
       const result = flow.startFreeBattle();
       if (result.ok) navigate({ screen: 'battle' });
     }, true);
-    start.position.set(layout.horizontalInset, 678);
-    content.addChild(summary, versus, difficulty, start);
+    start.position.set(layout.horizontalInset, 704);
+    content.addChild(summary, versus, engine, plan, difficulty, start);
   };
 
   const renderBattle = (): void => {

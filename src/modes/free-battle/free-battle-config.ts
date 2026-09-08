@@ -9,12 +9,17 @@ export interface FreeBattleSessionConfig {
   cpuDifficulty: AiDifficultyId;
 }
 
+export interface FreeBattleAccessPolicy {
+  allowLockedPlayerHeroes?: boolean;
+}
+
 export type FreeBattleConfigError = 'hero-locked';
 
 export function createFreeBattleSessionConfig(
   profile: PlayerProfile,
   input: Omit<FreeBattleSessionConfig, 'mode'>,
+  policy: FreeBattleAccessPolicy = {},
 ): FreeBattleSessionConfig | FreeBattleConfigError {
-  if (!profile.unlockedHeroes.includes(input.playerHeroId)) return 'hero-locked';
+  if (!policy.allowLockedPlayerHeroes && !profile.unlockedHeroes.includes(input.playerHeroId)) return 'hero-locked';
   return { mode: 'free-battle', ...input };
 }

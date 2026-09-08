@@ -6,3 +6,4 @@
 - [`deployment.md`](deployment.md) — staging and production publication model
 - [`battle-presentation-fidelity.md`](battle-presentation-fidelity.md) — current board/CPU presentation fidelity decisions
 - [`qa/r2-combat-characterization-gate.md`](qa/r2-combat-characterization-gate.md) — R2 automated combat regression gate and staging validation matrix
+- [`gameplay/r3-1-five-hero-gameplay-pass.md`](gameplay/r3-1-five-hero-gameplay-pass.md) — R3.1 hero identity contracts, validation access, and exit criteria
