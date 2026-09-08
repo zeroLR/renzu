@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createProductFlow } from '../src/app/game-session/product-flow';
+import { heroIds } from '../src/heroes/domain/hero-definition';
 import type { PlayerProfileStorage } from '../src/platform/storage/player-profile-storage';
 import { createPlayerProfile, unlockHero } from '../src/progression/profile/player-profile';
 
@@ -43,5 +44,25 @@ describe('product flow', () => {
     const result = flow.startFreeBattle();
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.session.config.playerHeroId).toBe('arcanist');
+  });
+
+  it('exposes every hero for validation without mutating profile ownership', () => {
+    const profileStorage = storage();
+    const flow = createProductFlow(profileStorage, { allowLockedFreeBattleHeroes: true });
+
+    expect(flow.snapshot().freeBattleAccess).toEqual({
+      playerHeroIds: heroIds,
+      validationOverride: true,
+    });
+
+    for (const heroId of heroIds) {
+      flow.selectPlayerHero(heroId);
+      const result = flow.startFreeBattle();
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.session.config.playerHeroId).toBe(heroId);
+      flow.clearSession();
+    }
+
+    expect(flow.snapshot().profile.unlockedHeroes).toEqual(['vanguard']);
   });
 });
