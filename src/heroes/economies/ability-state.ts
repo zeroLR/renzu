@@ -1,7 +1,7 @@
 import type { Player } from '../../game/board/board';
 
 export type AbilityKey = string;
-export type ResourceId = 'mana' | 'pressure' | 'momentum' | 'focus' | 'formation';
+export type ResourceId = 'mana' | 'pressure';
 
 export interface ActorAbilityState {
   resources: Record<ResourceId, number>;
@@ -18,9 +18,6 @@ export function createActorAbilityState(): ActorAbilityState {
     resources: {
       mana: 0,
       pressure: 0,
-      momentum: 0,
-      focus: 0,
-      formation: 0,
     },
     cooldowns: {},
     conditions: {},
