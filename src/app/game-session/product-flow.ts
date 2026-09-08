@@ -1,6 +1,6 @@
 import type { AiDifficultyId } from '../../ai/difficulty/difficulty-profile';
-import type { HeroId } from '../../heroes/domain/hero-definition';
-import { createFreeBattleSessionConfig } from '../../modes/free-battle/free-battle-config';
+import { heroIds, type HeroId } from '../../heroes/domain/hero-definition';
+import { createFreeBattleSessionConfig, type FreeBattleAccessPolicy } from '../../modes/free-battle/free-battle-config';
 import { EASY_STORY_ENCOUNTERS } from '../../modes/story/story-content';
 import type { PlayerProfileStorage } from '../../platform/storage/player-profile-storage';
 import { completeStoryEncounter, type PlayerProfile, type StoryEncounterId } from '../../progression/profile/player-profile';
@@ -13,10 +13,20 @@ export interface FreeBattleSelection {
   cpuDifficulty: AiDifficultyId;
 }
 
+export interface FreeBattleAccessSnapshot {
+  playerHeroIds: readonly HeroId[];
+  validationOverride: boolean;
+}
+
 export interface ProductFlowSnapshot {
   profile: PlayerProfile;
   freeBattle: FreeBattleSelection;
+  freeBattleAccess: FreeBattleAccessSnapshot;
   session: GameSession | null;
+}
+
+export interface ProductFlowOptions {
+  allowLockedFreeBattleHeroes?: boolean;
 }
 
 export type StartSessionResult =
@@ -49,8 +59,11 @@ function nextEncounterId(currentId: StoryEncounterId): StoryEncounterId | null {
     : null;
 }
 
-export function createProductFlow(storage: PlayerProfileStorage): ProductFlow {
+export function createProductFlow(storage: PlayerProfileStorage, options: ProductFlowOptions = {}): ProductFlow {
   let profile = storage.load();
+  const freeBattleAccessPolicy: FreeBattleAccessPolicy = {
+    allowLockedPlayerHeroes: options.allowLockedFreeBattleHeroes ?? false,
+  };
   let freeBattle: FreeBattleSelection = {
     playerHeroId: profile.unlockedHeroes[0] ?? 'vanguard',
     cpuHeroId: 'vanguard',
@@ -58,7 +71,15 @@ export function createProductFlow(storage: PlayerProfileStorage): ProductFlow {
   };
   let session: GameSession | null = null;
 
-  const snapshot = (): ProductFlowSnapshot => ({ profile, freeBattle: { ...freeBattle }, session });
+  const snapshot = (): ProductFlowSnapshot => ({
+    profile,
+    freeBattle: { ...freeBattle },
+    freeBattleAccess: {
+      playerHeroIds: freeBattleAccessPolicy.allowLockedPlayerHeroes ? heroIds : profile.unlockedHeroes,
+      validationOverride: freeBattleAccessPolicy.allowLockedPlayerHeroes ?? false,
+    },
+    session,
+  });
 
   const startStory = (encounterId: StoryEncounterId): StartSessionResult => {
     const config = createStoryGameSessionConfig(profile, encounterId);
@@ -82,7 +103,7 @@ export function createProductFlow(storage: PlayerProfileStorage): ProductFlow {
       return snapshot();
     },
     startFreeBattle() {
-      const config = createFreeBattleSessionConfig(profile, freeBattle);
+      const config = createFreeBattleSessionConfig(profile, freeBattle, freeBattleAccessPolicy);
       if (config === 'hero-locked') return { ok: false, error: config };
       session = createGameSession(fromFreeBattleConfig(config));
       return { ok: true, session };
