@@ -23,6 +23,18 @@ describe('player profile', () => {
     expect(profile.story.lastEncounterId).toBeNull();
   });
 
+  it('drops removed hero ids from legacy profile data', () => {
+    const profile = normalizePlayerProfile({
+      unlockedHeroes: ['vanguard', 'arcanist', 'architect', 'swordmaster'],
+      soul: 4,
+      skillFragments: 2,
+      story: { completedEncounterIds: ['E1-1'], lastEncounterId: 'E1-1' },
+    });
+
+    expect(profile.unlockedHeroes).toEqual(['vanguard', 'arcanist']);
+    expect(profile.story.lastEncounterId).toBe('E1-1');
+  });
+
   it('updates unlock, Soul and story state immutably', () => {
     const initial = createPlayerProfile();
     const next = completeStoryEncounter(grantSoul(unlockHero(initial, 'arcanist'), 5), 'E1-1');
