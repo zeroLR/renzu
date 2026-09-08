@@ -10,28 +10,30 @@ Board decisions remain authoritative. Heroes are tactical engines that alter how
 
 ## Status
 
-**R1 — Playable Staging / Device Validation**
+**R3.1 — Five-Hero Gameplay Pass**
 
-Current product foundation includes:
+Completed product foundation includes:
 
 - PixiJS 8 + TypeScript + Vite + Vitest
 - resilient WebGL/WebGPU renderer bootstrap with visible failure fallback
 - 9×9 intersection-based board and match domain
 - legal-action / ability / board-effect lifecycle
-- hero economy and passive foundations
-- Easy / Normal CPU decision and turn orchestration
+- complete v1 hero ability, passive, pattern, targeting, and timing contracts
+- ability-aware Easy / Normal CPU evaluation and turn orchestration
+- R2 combat characterization regression gate
 - Story and Free Battle product flows
 - portrait-first battle screen and HUD
 - result / rematch / Story continuation lifecycle
 - local-first player profile persistence
 - GitHub Pages staging / production deployment pipeline
 
-The current priority is to validate the vertical slice on real devices, then complete combat fidelity before scaling hero and Story content.
+The current priority is to validate that Vanguard, Arcanist, Shade, Architect, and Swordmaster create recognizably different match plans before Story content scales beyond the current vertical slice.
 
 ## Product planning
 
 - [`docs/roadmap.md`](docs/roadmap.md) — product milestones, v1 scope lock, exit criteria, and post-launch tracks
 - [`docs/execution-plan.md`](docs/execution-plan.md) — PR-sized execution sequence, quality gates, and release plan
+- [`docs/gameplay/r3-1-five-hero-gameplay-pass.md`](docs/gameplay/r3-1-five-hero-gameplay-pass.md) — current five-hero identity and validation contract
 - [`docs/architecture.md`](docs/architecture.md) — module boundaries and dependency rules
 - [`docs/deployment.md`](docs/deployment.md) — staging / production deployment model
 
