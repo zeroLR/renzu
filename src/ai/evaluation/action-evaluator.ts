@@ -40,14 +40,8 @@ function linePotential(board: Board, at: Position, player: Player): number {
   return 12;
 }
 
-function actionTarget(action: Exclude<LegalAction, { kind: 'end-follow-up' }>): Position {
-  if (action.kind === 'place') return action.at;
-  if (action.kind === 'follow-up') return action.action.kind === 'place' ? action.action.at : action.action.target;
-  return action.target;
-}
-
-function placementLike(action: LegalAction): boolean {
-  return action.kind === 'place' || (action.kind === 'follow-up' && action.action.kind === 'place');
+function actionTarget(action: LegalAction): Position {
+  return action.kind === 'place' ? action.at : action.target;
 }
 
 function evaluatePlacement(
@@ -57,15 +51,6 @@ function evaluatePlacement(
   heroId: HeroId,
   profile: AiDifficultyProfile,
 ): EvaluatedAction {
-  if (action.kind === 'end-follow-up') {
-    return {
-      action,
-      score: 0,
-      breakdown: { attack: 0, defense: 0, position: 0, ability: 0, total: 0 },
-      reasons: ['FOLLOW_UP_SKIP'],
-    };
-  }
-
   const board = state.match.board;
   const target = actionTarget(action);
   const enemy: Player = actor === 1 ? 2 : 1;
@@ -98,15 +83,6 @@ function evaluateAbility(
   heroId: HeroId,
   profile: AiDifficultyProfile,
 ): EvaluatedAction {
-  if (action.kind === 'end-follow-up') {
-    return {
-      action,
-      score: 0,
-      breakdown: { attack: 0, defense: 0, position: 0, ability: 0, total: 0 },
-      reasons: ['FOLLOW_UP_SKIP'],
-    };
-  }
-
   const target = actionTarget(action);
   const simulation = simulateTacticalAction(state, action, actor, heroId);
   if (!simulation) {
@@ -166,7 +142,7 @@ export function evaluateAction(
   heroId: HeroId,
   profile: AiDifficultyProfile,
 ): EvaluatedAction {
-  return placementLike(action)
+  return action.kind === 'place'
     ? evaluatePlacement(state, action, actor, heroId, profile)
     : evaluateAbility(state, action, actor, heroId, profile);
 }

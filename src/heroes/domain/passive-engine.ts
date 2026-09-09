@@ -1,9 +1,6 @@
 import type { PlacementPatternOutcome } from '../../game/rules/placement-pattern';
 import {
-  getAbilityCharge,
   getAbilityResource,
-  setAbilityCharge,
-  setAbilityCondition,
   setAbilityResource,
 } from '../economies/ability-economy';
 import type { AbilityStates, ResourceId } from '../economies/ability-state';
@@ -18,7 +15,6 @@ export interface PassiveOutcome {
 
 export interface AfterPlaceContext {
   pattern: PlacementPatternOutcome;
-  preserveMomentum?: boolean;
 }
 
 function gainResource(
@@ -43,7 +39,7 @@ export function applyAfterPlacePassive(
   heroId: HeroId,
   context: AfterPlaceContext,
 ): PassiveOutcome {
-  const { actor, reward, adjacentFriendlyCount, adjacentEnemy } = context.pattern;
+  const { actor, reward, adjacentEnemy } = context.pattern;
 
   if (heroId === 'vanguard') {
     return reward > 0 ? { states, triggered: true, boardEffect: 'guard' } : { states, triggered: false };
@@ -59,40 +55,6 @@ export function applyAfterPlacePassive(
     return adjacentEnemy
       ? gainResource(states, actor, 'pressure', 1, 3)
       : { states, triggered: false };
-  }
-
-  if (heroId === 'architect') {
-    const ready = adjacentFriendlyCount >= 2;
-    return {
-      states: setAbilityCondition(states, actor, 'formation-ready', ready),
-      triggered: ready,
-    };
-  }
-
-  if (heroId === 'swordmaster') {
-    if (reward > 0) {
-      const chargeBefore = getAbilityCharge(states, actor, 'step');
-      const charged = setAbilityCharge(states, actor, 'step', 1);
-      const momentum = gainResource(charged, actor, 'momentum', reward, 3);
-      return chargeBefore < 1 && !momentum.triggered
-        ? { states: momentum.states, triggered: true }
-        : momentum;
-    }
-
-    if (context.preserveMomentum && getAbilityCharge(states, actor, 'step') > 0) {
-      return {
-        states: setAbilityCharge(states, actor, 'step', 0),
-        triggered: false,
-      };
-    }
-
-    const before = getAbilityResource(states, actor, 'momentum');
-    if (before <= 0) return { states, triggered: false };
-    return {
-      states: setAbilityResource(states, actor, 'momentum', before - 1),
-      triggered: true,
-      resourceGained: { resourceId: 'momentum', amount: -1 },
-    };
   }
 
   return { states, triggered: false };

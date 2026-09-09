@@ -1,11 +1,11 @@
 import type { AbilityActivationRule } from '../economies/ability-economy';
 import type { ResourceId } from '../economies/ability-state';
 
-export type HeroId = 'vanguard' | 'arcanist' | 'shade' | 'architect' | 'swordmaster';
-export type PassiveId = 'fortified' | 'flow' | 'pressure' | 'formation' | 'momentum';
-export type HeroRole = 'defense' | 'control' | 'disruption' | 'offense';
-export type HeroEngineKind = 'cooldown' | 'resource' | 'conditional' | 'momentum';
-export type AbilityId = 'blink' | 'guard' | 'charge' | 'bulwark' | 'seal' | 'phase' | 'corrupt' | 'rally' | 'lattice' | 'step' | 'sever';
+export type HeroId = 'vanguard' | 'arcanist' | 'shade';
+export type PassiveId = 'fortified' | 'flow' | 'pressure';
+export type HeroRole = 'defense' | 'control' | 'disruption';
+export type HeroEngineKind = 'cooldown' | 'resource';
+export type AbilityId = 'blink' | 'guard' | 'charge' | 'bulwark' | 'seal' | 'phase' | 'corrupt';
 
 export interface HeroEconomyDefinition {
   kind: HeroEngineKind;
@@ -37,16 +37,6 @@ export const heroes: Record<HeroId, HeroDefinition> = {
     id: 'shade', role: 'disruption', passive: 'pressure', economy: { kind: 'resource', resourceId: 'pressure', max: 3 },
     skillPool: ['blink', 'corrupt'], defaultLoadout: ['blink', 'corrupt'],
     activationOverrides: { blink: { kind: 'resource', resourceId: 'pressure', amount: 2 }, corrupt: { kind: 'resource', resourceId: 'pressure', amount: 3 } },
-  },
-  architect: {
-    id: 'architect', role: 'control', passive: 'formation', economy: { kind: 'conditional', resourceId: 'formation', max: 3 },
-    skillPool: ['blink', 'rally', 'lattice'], defaultLoadout: ['rally', 'lattice'],
-    activationOverrides: { blink: { kind: 'condition', conditionId: 'formation-ready' }, rally: { kind: 'condition', conditionId: 'rally-ready' }, lattice: { kind: 'condition', conditionId: 'lattice-ready' } },
-  },
-  swordmaster: {
-    id: 'swordmaster', role: 'offense', passive: 'momentum', economy: { kind: 'momentum', resourceId: 'momentum', max: 3 },
-    skillPool: ['blink', 'step', 'sever'], defaultLoadout: ['step', 'sever'],
-    activationOverrides: { blink: { kind: 'resource', resourceId: 'momentum', amount: 2 }, step: { kind: 'charge', amount: 1 }, sever: { kind: 'resource', resourceId: 'momentum', amount: 3 } },
   },
 };
 

@@ -3,33 +3,25 @@ import { createBattleController } from '../src/app/game-session/battle-controlle
 import { createGameSession } from '../src/app/game-session/create-game-session';
 
 const session = () => createGameSession({
-  mode: { kind: 'free-battle' },
-  playerHeroId: 'vanguard',
-  cpuHeroId: 'vanguard',
-  cpuDifficulty: 'normal',
+  mode: { kind: 'free-battle' }, playerHeroId: 'vanguard', cpuHeroId: 'vanguard', cpuDifficulty: 'normal',
 });
 
 describe('battle interaction controller', () => {
-  it('leaves a visible opponent phase before resolving the CPU response', async () => {
+  it('leaves a visible opponent phase before resolving exactly one CPU response', async () => {
     const game = session();
     const controller = createBattleController(game, () => 0);
-
     controller.tapCell({ row: 4, col: 4 });
-
     expect(game.state.match.board[4][4]).toBe(1);
     expect(game.state.match.phase).toBe('opponent');
     expect(game.state.match.board.flat().filter((cell) => cell === 2).length).toBe(0);
-    expect(controller.interaction().cpuThinking).toBe(false);
 
     const phases: string[] = [];
-    await controller.advanceCpuTurn(
-      () => phases.push(game.state.match.phase),
-      { delay: async () => undefined, thinkDelayMs: 0, followUpDelayMs: 0 },
-    );
+    await controller.advanceCpuTurn(() => phases.push(game.state.match.phase), { delay: async () => undefined, thinkDelayMs: 0 });
 
     expect(game.state.match.phase).toBe('player');
     expect(game.state.match.board.flat().filter((cell) => cell === 2).length).toBe(1);
     expect(game.state.match.turn).toBe(2);
+    expect(game.state.match.actionHistory).toHaveLength(2);
     expect(phases).toContain('opponent');
     expect(phases.at(-1)).toBe('player');
     expect(controller.interaction().cpuThinking).toBe(false);
@@ -45,7 +37,6 @@ describe('battle interaction controller', () => {
     const game = session();
     game.state.match.board[4][4] = 1;
     const controller = createBattleController(game, () => 0);
-
     controller.selectAbility('charge');
     const sourceStep = controller.targeting();
     expect(sourceStep).toMatchObject({ abilityId: 'charge', phase: 'select-source' });
@@ -65,15 +56,8 @@ describe('battle interaction controller', () => {
     const game = session();
     game.state.match.board[4][4] = 1;
     const controller = createBattleController(game, () => 0);
-
     controller.selectAbility('guard');
-    expect(controller.targeting()).toEqual({
-      abilityId: 'guard',
-      phase: 'select-target',
-      sources: [],
-      targets: [{ row: 4, col: 4 }],
-    });
-
+    expect(controller.targeting()).toEqual({ abilityId: 'guard', phase: 'select-target', sources: [], targets: [{ row: 4, col: 4 }] });
     controller.clearSelection();
     expect(controller.targeting()).toEqual({ abilityId: null, phase: 'idle', sources: [], targets: [] });
   });
@@ -82,7 +66,6 @@ describe('battle interaction controller', () => {
     const game = session();
     const controller = createBattleController(game, () => 0);
     controller.selectAbility('blink');
-
     expect(controller.interaction().lastError).toBe('ability-unavailable');
     expect(game.state.match.turn).toBe(1);
     expect(game.state.match.board.flat().every((cell) => cell === 0)).toBe(true);

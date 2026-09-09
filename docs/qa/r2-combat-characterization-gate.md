@@ -1,19 +1,10 @@
 # R2 Combat Characterization Gate
 
+> **Historical milestone / current regression boundary:** R2 originally included Architect and Swordmaster experiments. The active product baseline was later simplified to Vanguard, Arcanist, and Shade with one fixed turn topology. This document now describes the regression contract that remains relevant after that product decision.
+
 ## Purpose
 
-R2.4 is the release gate for the Combat Complete milestone. It does not add combat features or redesign architecture. It proves that the combat contracts built in R2.1–R2.3 remain coherent when exercised together.
-
-The gate has two layers:
-
-1. **Automated characterization** — deterministic cross-module scenarios in CI.
-2. **Staging combat matrix** — interaction/readability checks that require the rendered product.
-
-R2 is complete only when both layers are green and no P0/P1 combat blocker remains.
-
----
-
-## Automated gate
+The combat gate protects durable shared behavior across gameplay modules. It is not a requirement to preserve every experimental hero mechanic that existed during R2.
 
 Run:
 
@@ -21,47 +12,41 @@ Run:
 npm run test:combat-gate
 ```
 
-The gate covers these milestone contracts:
+## Current automated gate
 
 | Contract | Characterization |
 | --- | --- |
-| Vanguard engine | pattern placement materializes Guard; effect survives player handoff and expires after the opponent logical turn |
-| Arcanist engine | pattern reward reaches Mana economy and unlocks a real Phase activation lifecycle |
+| Vanguard engine | pattern placement materializes Guard; effect lifetime remains correct across the opponent turn |
+| Arcanist engine | pattern reward reaches Mana economy and supports real ability activation |
 | Shade engine | legal Corrupt consumes Pressure and mutates the shared board state |
-| Architect engine | live formation condition, legal target generation, and Rally resolution agree |
-| Swordmaster engine | Step → placement → triggered Sever preserves ownership until the chain resolves |
-| CPU orchestration | a pending multi-action Swordmaster turn completes through controller choreography and returns to the player |
-| Match ending | normal placement and ability placement both terminate through shared session rules |
+| Fixed turn topology | one player action hands off to CPU; one CPU action returns control to player |
+| Match ending | normal placement and ability placement terminate through shared session rules |
+| Legal-action authority | presentation/AI operate through the same legal action and resolver boundaries |
 
-Existing lower-level suites remain authoritative for detailed boundaries such as individual illegal targets, cooldown arithmetic, pattern scoring, board-effect expiry units, and AI ranking.
+Lower-level suites remain authoritative for individual illegal targets, cooldown/resource arithmetic, pattern scoring, board-effect expiry, targeting projection, and AI ranking details.
 
-The R2.4 suite intentionally tests **integration seams**, not every coordinate permutation already covered elsewhere.
-
----
-
-## Staging combat matrix
-
-Validate on the current staging build after the gate PR reaches `main`.
+## Active staging combat matrix
 
 ### Shared battle flow
 
 - [ ] 9×9 stones render on intersections and edge intersections remain tappable.
 - [ ] normal placement visibly hands off to `CPU THINKING`, then returns to the player.
+- [ ] every active ability also hands off after resolution; there is no intermediate hero-specific phase.
 - [ ] illegal taps do not mutate the board or leave targeting stuck.
 - [ ] victory ends input and exposes result actions.
 - [ ] rematch creates a clean combat state.
 
 ### Vanguard
 
-- [ ] Blink: source → target hints match legal movement.
-- [ ] Charge: eight-direction source/target hints match legal push/move outcomes.
-- [ ] pattern placement shows Fortified/Guard feedback and the effect expires at the intended time.
+- [ ] Blink source/target hints match legal movement.
+- [ ] Charge eight-direction source/target hints match legal push/move outcomes.
+- [ ] pattern placement shows Fortified/Guard feedback and intended expiry.
 - [ ] cooldown readiness updates after logical turns.
 
 ### Arcanist
 
 - [ ] pattern creation visibly increases Mana.
-- [ ] ability activation spends Mana and Flow refund/readiness remains understandable.
+- [ ] ability activation spends Mana and Flow remains understandable.
 - [ ] Phase places a stone and shows Flame denial on cardinal points.
 - [ ] blocked Flame points cannot be selected for normal placement.
 
@@ -69,50 +54,35 @@ Validate on the current staging build after the gate PR reaches `main`.
 
 - [ ] adjacent-enemy placement increases Pressure.
 - [ ] Corrupt only marks supported, unguarded enemy targets.
-- [ ] Corrupt removes the target and its temporary denial is visible.
-
-### Architect
-
-- [ ] Rally/Lattice are unavailable without a qualifying formation.
-- [ ] qualifying board state makes the relevant ability selectable without a reload or extra move.
-- [ ] Rally source/target hints match the shared legal-action surface.
-- [ ] Lattice denial cells are readable and expire correctly.
-
-### Swordmaster
-
-- [ ] pattern creation produces Momentum and Step readiness.
-- [ ] Step clearly enters `STEP ARMED · PLACE A STONE` state.
-- [ ] Step placement can open Sever without giving control to CPU early.
-- [ ] triggered Sever shows source/target hints and `END TURN` remains available.
-- [ ] resolving or skipping Sever returns to CPU exactly once.
+- [ ] Corrupt removes the target and temporary denial is visible.
 
 ### CPU / AI
 
 - [ ] Easy and Normal never enter a stuck opponent phase during ordinary play.
-- [ ] CPU can use abilities without breaking turn choreography.
-- [ ] obvious ability-created wins/defenses are not ignored in reproducible test positions.
-- [ ] CPU multi-action follow-up does not exceed the bounded choreography guard.
+- [ ] CPU resolves exactly one complete action per logical turn.
+- [ ] CPU can use active abilities without breaking turn ownership.
+- [ ] obvious ability-created wins/defenses are not ignored in reproducible positions.
 
----
+## Retired R2 experiments
+
+The following are intentionally **not current regression requirements**:
+
+- Architect formation / Rally / Lattice;
+- Swordmaster Momentum / Step / Sever;
+- precommit follow-up;
+- triggered follow-up;
+- after-step or same-turn action chaining;
+- follow-up `END TURN` interaction.
+
+They remain visible in Git history and prior PRs as design evidence, but should not be reintroduced accidentally as compatibility work.
 
 ## Severity gate
 
-R2 cannot close with:
-
 - **P0:** match cannot finish, combat boot failure, unrecoverable state.
-- **P1:** legal action resolves incorrectly, important ability unusable, CPU/session stuck, turn ownership breaks.
+- **P1:** common legal action resolves incorrectly, active ability unusable, CPU/session stuck, or turn ownership breaks.
 
-P2 readability/balance findings may move forward only if recorded for the appropriate later milestone and do not make a core combat action misleading.
+P2 readability/balance findings may move forward only if recorded for the appropriate later milestone and do not make a core action misleading.
 
----
+## Current exit use
 
-## Exit
-
-R2.4 is complete when:
-
-- full CI is green;
-- `npm run test:combat-gate` is green;
-- staging combat matrix is green for the v1 five-hero surface;
-- there are no open P0/P1 combat blockers.
-
-After this gate, new combat architecture or ability semantics require an explicit scope decision rather than being folded into R3 content work.
+R2 itself is already closed. This suite now serves as a regression boundary for R3+ changes. The active R3.1 staging identity gate is tracked separately in Issue #31.
