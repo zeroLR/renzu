@@ -13,9 +13,11 @@ describe('hero definitions', () => {
     expect(heroes.shade.economy.resourceId).toBe('pressure');
   });
 
-  it('keeps loadouts within the hero skill pool', () => {
-    expect(isLegalLoadout('vanguard', ['blink', 'charge'])).toBe(true);
+  it('keeps one- or two-slot loadouts within the hero skill pool', () => {
+    expect(isLegalLoadout('vanguard', ['guard', 'charge'])).toBe(true);
+    expect(isLegalLoadout('shade', ['corrupt'])).toBe(true);
     expect(isLegalLoadout('vanguard', ['corrupt', 'charge'])).toBe(false);
+    expect(isLegalLoadout('vanguard', [])).toBe(false);
   });
 });
 
