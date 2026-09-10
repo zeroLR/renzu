@@ -34,6 +34,29 @@ describe('CPU turn session orchestration', () => {
     expect(result.state.match.actionHistory).toHaveLength(2);
   });
 
+  it('attaches ready Guard support to a normal Vanguard CPU placement without adding another action', () => {
+    const state = advanceToCpu(createState());
+    state.match.board[2][2] = 2;
+    state.abilities[2].cooldowns.charge = 4;
+
+    const result = resolveCpuTurn(state, { heroId: 'vanguard', difficulty: 'normal', random: () => 0 });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.decision.action.kind).toBe('place');
+    if (result.decision.action.kind !== 'place') return;
+    expect(result.decision.action.support).toEqual({ abilityId: 'guard', target: { row: 2, col: 2 } });
+    expect(result.state.match.phase).toBe('player');
+    expect(result.state.match.actionHistory).toHaveLength(2);
+    expect(result.state.abilities[2].cooldowns.guard).toBe(3);
+    expect(result.state.boardEffects).toContainEqual({
+      kind: 'guard',
+      at: { row: 2, col: 2 },
+      owner: 2,
+      expiry: { kind: 'owner-turns', remaining: 1 },
+    });
+  });
+
   it('takes an immediate win through the same decision pipeline', () => {
     let state = advanceToCpu(createState());
     state.match.board[0][0] = 2;

@@ -27,10 +27,11 @@ describe('battle interaction controller', () => {
     expect(controller.interaction().cpuThinking).toBe(false);
   });
 
-  it('derives ability readiness from legal actions', () => {
+  it('derives turn-ability readiness from legal actions', () => {
     const controller = createBattleController(session(), () => 0);
     const abilities = controller.legalActions().filter((action) => action.kind === 'ability');
     expect(abilities.every((action) => action.actor === 1)).toBe(true);
+    expect(abilities.every((action) => action.abilityId !== 'guard')).toBe(true);
   });
 
   it('projects legal sources first, then targets for a source-target ability', () => {
@@ -52,14 +53,37 @@ describe('battle interaction controller', () => {
     expect(targetStep.targets).toContainEqual({ row: 3, col: 3 });
   });
 
-  it('projects targets directly for an ability without a source-selection step', () => {
+  it('arms Guard on an existing ally and then requires a normal placement', () => {
     const game = session();
     game.state.match.board[4][4] = 1;
     const controller = createBattleController(game, () => 0);
+
+    expect(controller.abilityAvailable('guard')).toBe(true);
     controller.selectAbility('guard');
-    expect(controller.targeting()).toEqual({ abilityId: 'guard', phase: 'select-target', sources: [], targets: [{ row: 4, col: 4 }] });
-    controller.clearSelection();
-    expect(controller.targeting()).toEqual({ abilityId: null, phase: 'idle', sources: [], targets: [] });
+    expect(controller.targeting()).toEqual({
+      abilityId: 'guard',
+      phase: 'select-target',
+      sources: [],
+      targets: [{ row: 4, col: 4 }],
+    });
+
+    controller.tapCell({ row: 4, col: 4 });
+    expect(game.state.match.phase).toBe('player');
+    expect(game.state.match.actionHistory).toHaveLength(0);
+    expect(controller.targeting().phase).toBe('select-placement');
+    expect(controller.interaction().selectedSupportTarget).toEqual({ row: 4, col: 4 });
+
+    controller.tapCell({ row: 4, col: 5 });
+    expect(game.state.match.board[4][5]).toBe(1);
+    expect(game.state.match.phase).toBe('opponent');
+    expect(game.state.match.actionHistory).toHaveLength(1);
+    expect(game.state.abilities[1].cooldowns.guard).toBe(3);
+    expect(game.state.boardEffects).toContainEqual({
+      kind: 'guard',
+      at: { row: 4, col: 4 },
+      owner: 1,
+      expiry: { kind: 'owner-turns', remaining: 1 },
+    });
   });
 
   it('reports a hero-inaccessible ability without mutating the match', () => {

@@ -107,15 +107,15 @@ export function renderBattleScreen(
     });
   }
 
-  if (targeting.phase === 'select-target') {
+  if (targeting.phase === 'select-target' || targeting.phase === 'select-placement') {
     targeting.targets.forEach((at) => {
       const point = boardPoint(BOARD, at);
       const marker = new Graphics()
-        .circle(point.x, point.y, 8)
+        .circle(point.x, point.y, targeting.phase === 'select-placement' ? 7 : 8)
         .stroke({ color: color.gold, width: 1 })
         .circle(point.x, point.y, 2)
         .fill(color.gold);
-      marker.alpha = 0.72;
+      marker.alpha = targeting.phase === 'select-placement' ? 0.56 : 0.72;
       marker.eventMode = 'none';
       root.addChild(marker);
     });
@@ -150,6 +150,17 @@ export function renderBattleScreen(
     root.addChild(selected);
   }
 
+  if (interaction.selectedSupportTarget) {
+    const point = boardPoint(BOARD, interaction.selectedSupportTarget);
+    const selected = new Graphics()
+      .circle(point.x, point.y, 18)
+      .stroke({ color: color.gold, width: 2 })
+      .circle(point.x, point.y, 14)
+      .stroke({ color: color.violet, width: 1 });
+    selected.eventMode = 'none';
+    root.addChild(selected);
+  }
+
   if (cpuTurn) {
     const pulse = new Graphics().circle(BOARD.originX + BOARD.size - 22, 164, interaction.cpuThinking ? 4 : 3).fill(color.gold);
     pulse.alpha = interaction.cpuThinking ? 0.9 : 0.5;
@@ -163,11 +174,16 @@ export function renderBattleScreen(
   const hero = heroes[session.config.playerHeroId];
   const heroNode = label(`${hero.id.toUpperCase()} · ${hero.economy.kind.toUpperCase()}`, type.caption, color.inkSoft, '700');
   heroNode.position.set(43, 568);
+  const abilityInstruction = targeting.phase === 'select-source'
+    ? 'SELECT SOURCE'
+    : targeting.phase === 'select-placement'
+      ? 'GUARD SET · PLACE A STONE'
+      : 'SELECT TARGET';
   const instruction = label(
     cpuTurn
       ? 'OPPONENT IS CONSIDERING THE BOARD'
       : interaction.selectedAbilityId
-        ? `${interaction.selectedAbilityId.toUpperCase()} · ${targeting.phase === 'select-source' ? 'SELECT SOURCE' : 'SELECT TARGET'}`
+        ? `${interaction.selectedAbilityId.toUpperCase()} · ${abilityInstruction}`
         : 'PLACE A STONE OR USE AN ABILITY',
     10,
     cpuTurn || interaction.selectedAbilityId ? color.gold : color.muted,
@@ -176,11 +192,8 @@ export function renderBattleScreen(
   instruction.position.set(43, 592);
   root.addChild(heroNode, instruction);
 
-  const legal = controller.legalActions();
-  const legalAbilityIds = legal.flatMap((action): AbilityId[] => action.kind === 'ability' ? [action.abilityId] : []);
-
   hero.defaultLoadout.forEach((abilityId: AbilityId, index: number) => {
-    const ready = playerTurn && legalAbilityIds.includes(abilityId);
+    const ready = playerTurn && controller.abilityAvailable(abilityId);
     const selected = interaction.selectedAbilityId === abilityId;
     const cooldown = state.abilities[1].cooldowns[abilityId] ?? 0;
     const title = cooldown > 0 ? `${abilityId.toUpperCase()} · ${cooldown}` : abilityId.toUpperCase();
