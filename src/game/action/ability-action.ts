@@ -43,7 +43,6 @@ export type AbilityActionResult =
   | { ok: false; state: AbilityActionState; consumedTurn: false; error: AbilityActionError };
 
 const DEFAULT_ACTIVATIONS: Partial<Record<AbilityId, AbilityActivationRule>> = {
-  blink: { kind: 'resource', resourceId: 'mana', amount: 2 },
   guard: { kind: 'resource', resourceId: 'mana', amount: 2 },
   seal: { kind: 'resource', resourceId: 'mana', amount: 2 },
   corrupt: { kind: 'resource', resourceId: 'mana', amount: 3 },
@@ -94,12 +93,7 @@ function resolveBoardMutation(state: AbilityActionState, intent: AbilityIntent):
 
   if (!isInsideBoard(board, target.row, target.col)) return null;
 
-  if (abilityId === 'blink') {
-    if (!source || !isInsideBoard(board, source.row, source.col) || board[source.row][source.col] !== actor) return null;
-    if (board[target.row][target.col] !== 0 || isBlocked(effects, target) || isGuarded(effects, source)) return null;
-    board[source.row][source.col] = 0;
-    board[target.row][target.col] = actor;
-  } else if (abilityId === 'guard') {
+  if (abilityId === 'guard') {
     if (board[target.row][target.col] !== actor || isGuarded(effects, target)) return null;
     effects.push(createBoardEffect('guard', target, actor, { kind: 'owner-turns', remaining: 2 }));
   } else if (abilityId === 'bulwark') {

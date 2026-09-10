@@ -34,7 +34,7 @@ function resolvePlacementTurn(
   const placed = resolvePlaceAction(state.match, actor, at, { completeTurn: false });
   if (!placed.ok) return { ok: false, state, consumedTurn: false, error: placed.error };
 
-  const pattern = evaluatePlacementPattern(placed.state.board, at, actor);
+  const pattern = evaluatePlacementPattern(placed.state.board, at, actor, state.boardEffects);
   let abilities = state.abilities;
   let boardEffects = state.boardEffects;
   if (heroId) {

@@ -5,7 +5,7 @@ export type HeroId = 'vanguard' | 'arcanist' | 'shade';
 export type PassiveId = 'fortified' | 'flow' | 'pressure';
 export type HeroRole = 'defense' | 'control' | 'disruption';
 export type HeroEngineKind = 'cooldown' | 'resource';
-export type AbilityId = 'blink' | 'guard' | 'charge' | 'bulwark' | 'seal' | 'phase' | 'corrupt';
+export type AbilityId = 'guard' | 'charge' | 'bulwark' | 'seal' | 'phase' | 'corrupt';
 
 export interface HeroEconomyDefinition {
   kind: HeroEngineKind;
@@ -19,24 +19,24 @@ export interface HeroDefinition {
   passive: PassiveId;
   economy: HeroEconomyDefinition;
   skillPool: readonly AbilityId[];
-  defaultLoadout: readonly [AbilityId, AbilityId];
+  defaultLoadout: readonly AbilityId[];
   activationOverrides: Partial<Record<AbilityId, AbilityActivationRule>>;
 }
 
 export const heroes: Record<HeroId, HeroDefinition> = {
   vanguard: {
     id: 'vanguard', role: 'defense', passive: 'fortified', economy: { kind: 'cooldown' },
-    skillPool: ['blink', 'guard', 'charge', 'bulwark'], defaultLoadout: ['blink', 'charge'],
-    activationOverrides: { blink: { kind: 'cooldown', turns: 3 }, guard: { kind: 'cooldown', turns: 3 }, charge: { kind: 'cooldown', turns: 4 }, bulwark: { kind: 'cooldown', turns: 5 } },
+    skillPool: ['guard', 'charge', 'bulwark'], defaultLoadout: ['guard', 'charge'],
+    activationOverrides: { guard: { kind: 'cooldown', turns: 3 }, charge: { kind: 'cooldown', turns: 4 }, bulwark: { kind: 'cooldown', turns: 5 } },
   },
   arcanist: {
     id: 'arcanist', role: 'control', passive: 'flow', economy: { kind: 'resource', resourceId: 'mana', max: 5 },
-    skillPool: ['blink', 'seal', 'phase'], defaultLoadout: ['blink', 'phase'], activationOverrides: {},
+    skillPool: ['seal', 'phase'], defaultLoadout: ['seal', 'phase'], activationOverrides: {},
   },
   shade: {
     id: 'shade', role: 'disruption', passive: 'pressure', economy: { kind: 'resource', resourceId: 'pressure', max: 3 },
-    skillPool: ['blink', 'corrupt'], defaultLoadout: ['blink', 'corrupt'],
-    activationOverrides: { blink: { kind: 'resource', resourceId: 'pressure', amount: 2 }, corrupt: { kind: 'resource', resourceId: 'pressure', amount: 3 } },
+    skillPool: ['corrupt'], defaultLoadout: ['corrupt'],
+    activationOverrides: { corrupt: { kind: 'resource', resourceId: 'pressure', amount: 3 } },
   },
 };
 
@@ -47,5 +47,8 @@ export function isAbilityAccessible(heroId: HeroId, abilityId: AbilityId): boole
 }
 
 export function isLegalLoadout(heroId: HeroId, abilityIds: readonly AbilityId[]): boolean {
-  return abilityIds.length === 2 && new Set(abilityIds).size === 2 && abilityIds.every((id) => isAbilityAccessible(heroId, id));
+  return abilityIds.length >= 1
+    && abilityIds.length <= 2
+    && new Set(abilityIds).size === abilityIds.length
+    && abilityIds.every((id) => isAbilityAccessible(heroId, id));
 }

@@ -16,7 +16,7 @@ export const EASY_STORY_ENCOUNTERS: readonly StoryEncounterDefinition[] = [
   { id: 'E1-1', order: 1, playerHeroId: 'vanguard', cpuHeroId: 'vanguard', cpuDifficulty: 'easy', concepts: ['legal-placement', 'five-in-row'] },
   { id: 'E1-2', order: 2, playerHeroId: 'vanguard', cpuHeroId: 'vanguard', cpuDifficulty: 'easy', concepts: ['open-two', 'open-three', 'basic-block'] },
   { id: 'E1-3', order: 3, playerHeroId: 'vanguard', cpuHeroId: 'vanguard', cpuDifficulty: 'easy', concepts: ['hero-engine', 'ability-readiness'] },
-  { id: 'E1-4', order: 4, playerHeroId: 'vanguard', cpuHeroId: 'vanguard', cpuDifficulty: 'easy', concepts: ['blink'] },
+  { id: 'E1-4', order: 4, playerHeroId: 'vanguard', cpuHeroId: 'vanguard', cpuDifficulty: 'easy', concepts: ['guard', 'fortified'] },
   { id: 'E1-5', order: 5, playerHeroId: 'vanguard', cpuHeroId: 'vanguard', cpuDifficulty: 'easy', concepts: ['charge'] },
   { id: 'E1-BOSS', order: 6, playerHeroId: 'vanguard', cpuHeroId: 'vanguard', cpuDifficulty: 'normal', concepts: ['chapter-mastery'], boss: true },
 ];

@@ -62,10 +62,10 @@ describe('battle interaction controller', () => {
     expect(controller.targeting()).toEqual({ abilityId: null, phase: 'idle', sources: [], targets: [] });
   });
 
-  it('reports an unavailable ability without mutating the match', () => {
+  it('reports a hero-inaccessible ability without mutating the match', () => {
     const game = session();
     const controller = createBattleController(game, () => 0);
-    controller.selectAbility('blink');
+    controller.selectAbility('corrupt');
     expect(controller.interaction().lastError).toBe('ability-unavailable');
     expect(game.state.match.turn).toBe(1);
     expect(game.state.match.board.flat().every((cell) => cell === 0)).toBe(true);

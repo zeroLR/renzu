@@ -10,7 +10,7 @@ Board decisions remain authoritative. Heroes are tactical engines that alter how
 
 ## Status
 
-**R3.1 — Three-Hero Gameplay Pass**
+**R3.1.1 — Hero Power Budget & Pattern Mastery**
 
 Completed product foundation includes:
 
@@ -19,6 +19,8 @@ Completed product foundation includes:
 - 9×9 intersection-based board and match domain
 - fixed-turn legal-action / ability / board-effect lifecycle
 - Vanguard, Arcanist, and Shade hero engines
+- semantic open/closed three/four Pattern Events
+- generic Pattern Mastery entitlement grammar
 - ability-aware Easy / Normal CPU evaluation with one action per logical turn
 - R2 combat characterization regression gate
 - Story and Free Battle product flows
@@ -27,13 +29,14 @@ Completed product foundation includes:
 - local-first player profile persistence
 - GitHub Pages staging / production deployment pipeline
 
-The current priority is to validate that Vanguard, Arcanist, and Shade create recognizably different match plans on the same fixed turn topology before Story content scales beyond the current vertical slice.
+The current priority is to establish a fair power budget for topology-changing abilities and then give Vanguard, Arcanist, and Shade distinct setup → entitlement → conversion loops without changing turn topology.
 
 ## Product planning
 
 - [`docs/roadmap.md`](docs/roadmap.md) — product milestones, v1 scope lock, exit criteria, and post-launch tracks
 - [`docs/execution-plan.md`](docs/execution-plan.md) — PR-sized execution sequence, quality gates, and release plan
 - [`docs/gameplay/r3-1-three-hero-gameplay-pass.md`](docs/gameplay/r3-1-three-hero-gameplay-pass.md) — current three-hero identity and fixed-turn validation contract
+- [`docs/gameplay/r3-1-1-hero-power-budget-pattern-mastery.md`](docs/gameplay/r3-1-1-hero-power-budget-pattern-mastery.md) — active power-budget and Pattern Mastery design contract
 - [`docs/architecture.md`](docs/architecture.md) — module boundaries and dependency rules
 - [`docs/deployment.md`](docs/deployment.md) — staging / production deployment model
 

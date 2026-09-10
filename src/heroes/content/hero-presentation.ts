@@ -10,7 +10,7 @@ export const heroPresentation: Record<HeroId, HeroPresentationProfile> = {
   vanguard: {
     displayName: 'VANGUARD',
     engineLabel: 'COOLDOWN · DEFENSE',
-    battlePlan: 'FORTIFY PATTERNS, THEN REPOSITION OR PUSH.',
+    battlePlan: 'FORTIFY PATTERNS, THEN CONVERT POSITION WITH GUARD OR CHARGE.',
   },
   arcanist: {
     displayName: 'ARCANIST',

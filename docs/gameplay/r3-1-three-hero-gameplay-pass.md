@@ -10,11 +10,11 @@ Active roster:
 - Arcanist
 - Shade
 
-Architect and Swordmaster are not part of the active product roster. Their previous gameplay introduced either turn-flow complexity or strategic overlap that should not remain in the baseline while the core hero model is still being evaluated.
+Architect and Swordmaster are not part of the active product roster. Blink is also retired from the active ability vocabulary because spending a full turn to relocate an existing stone has not produced enough tactical value under the fixed-turn contract.
 
 ## Fixed turn topology
 
-For the active baseline, every legal player or CPU action completes exactly one logical turn:
+Every legal player or CPU action completes exactly one logical turn:
 
 ```text
 Player action
@@ -30,72 +30,77 @@ resolve board / economy / passive
 Player turn
 ```
 
-No active hero may add a precommit phase, triggered follow-up phase, chained after-step phase, or optional end-turn branch.
+No active hero may add a precommit phase, triggered follow-up phase, chained after-step phase, or optional end-turn branch during this baseline pass.
 
-Hero-specific turn-topology changes may be reconsidered only after the fixed-flow roster demonstrates enough depth through board manipulation, economy, passive timing, targeting, and counterplay.
+## Current gameplay findings
 
-## Vanguard — Cooldown / Defense
+Staging validation exposed an identity/conversion imbalance rather than a simple numerical imbalance:
 
-**Primary question:** Which existing stones should I protect, reposition, or push to stabilize a useful line?
+- **Vanguard:** has the clearest win conversion. Building next to a closed four can make a later Charge finish too easy when cooldown is the only meaningful gate.
+- **Arcanist:** Mana and spatial control are understandable, but the route from control to a forced winning continuation is not yet clear.
+- **Shade:** Corrupt can repeatedly disrupt the opponent, but disruption does not yet convert cleanly into the Shade player's own winning pressure.
+- **Cross-system:** abilities that directly alter stone topology are materially stronger than passive protection or temporary denial and need a correspondingly larger power budget.
 
-**Economy rhythm:** Abilities are reliable but gated by cooldown recovery.
+The next design work therefore focuses on **board-earned entitlement**, not broad cooldown/Mana tuning.
 
-**Signature sequence:** Build a pattern → gain Fortified protection → use Blink / Charge to preserve or convert position.
+## R3.1.1 — Hero Power Budget & Pattern Mastery
 
-**Counterplay:** Guarded stones trade mobility for protection; opponents can pressure elsewhere while key movement tools cool down.
+Authoritative spec: [`r3-1-1-hero-power-budget-pattern-mastery.md`](r3-1-1-hero-power-budget-pattern-mastery.md).
 
-**Identity risk to watch:** Vanguard already owns the clearest movement/push identity. New heroes should not duplicate this plan under a different resource name.
+Goals:
 
-## Arcanist — Mana / Control
+- retire Blink cleanly;
+- classify ability power by how directly it changes stone topology;
+- enrich placement outcomes with semantic pattern events such as open-three, closed-four, open-four, and multi-threat;
+- establish a generic Pattern Mastery accumulator that can unlock a future power without granting extra actions;
+- preserve current turn topology and existing passive reward behavior.
 
-**Primary question:** Which patterns are worth building now to fund stronger spatial control later?
+R3.1.1 deliberately does not decide the final Charge/Phase/Corrupt mastery thresholds.
 
-**Economy rhythm:** Pattern creation produces Mana; ability use spends Mana while Flow partially refunds ability activity.
+## R3.1.2 — Three-Hero Ability Rework
 
-**Signature sequence:** Create three/four pattern → gain Mana → use Seal / Phase to convert resource into board-space control.
+After the shared grammar is stable, redesign the three hero conversion loops:
 
-**Counterplay:** Deny clean pattern-building and force low-Mana defensive turns.
+### Vanguard — Convert
 
-## Shade — Pressure / Disruption
+**Question:** What board achievement should entitle the player to a high-impact Charge conversion?
 
-**Primary question:** When is it worth playing near enemy stones to create enough Pressure for disruption?
+Goal: keep Charge recognizable and powerful without letting cooldown alone turn a near-four into a routine forced finish.
 
-**Economy rhythm:** Pressure grows through contested adjacency rather than isolated pattern building.
+### Arcanist — Shape
 
-**Signature sequence:** Enter contested space → build Pressure → Corrupt a tactically important supported enemy stone.
+**Question:** How does accumulated pattern value let the Arcanist remove enough valid responses that a normal Gomoku threat becomes forced?
 
-**Counterplay:** Maintain spacing, reduce valuable contact points, and avoid exposing a single stone whose removal collapses multiple threats.
+Goal: establish a clear control → winning continuation loop without giving Arcanist a generic direct finisher.
+
+### Shade — Break → Exploit
+
+**Question:** How does successful disruption create offensive leverage for Shade rather than only resetting the opponent?
+
+Goal: preserve contact/removal identity while giving the hero a route from disruption to victory.
 
 ## Identity quality bar
 
-R3.1 is successful when all three heroes share the same turn structure but still differ in:
+R3.1 is successful when all three heroes share the same turn structure but differ in:
 
 1. **Board-reading priority** — what positions attract attention.
-2. **Economy cadence** — when abilities become available.
-3. **Signature sequence** — the repeatable 2–3 decision pattern that expresses the hero.
-4. **Counterplay** — how an opponent can disrupt that plan through board decisions.
-5. **CPU behavior** — Easy / Normal should use the same engine in ways that support, not contradict, the hero identity.
+2. **Economy cadence** — how useful board play earns access to stronger actions.
+3. **Conversion loop** — how setup becomes an actual path toward victory.
+4. **Counterplay** — how the opponent interrupts that loop through board decisions.
+5. **CPU behavior** — Easy / Normal use the same engine in ways that support the intended identity.
 
-Perfect matchup balance is not required at this gate. Strategic identity is.
-
-## Deferred design question
-
-After Vanguard / Arcanist / Shade are proven under the fixed turn topology, evaluate whether hero depth is sufficient through:
-
-- board manipulation;
-- passive triggers;
-- resource/cooldown constraints;
-- temporary board effects;
-- targeting restrictions;
-- tactical opportunity and counterplay.
-
-Only then decide whether a future hero merits changing action topology. Such a change should be treated as a product-level combat-flow decision, not simply another ability mechanic.
+Perfect matchup balance is not required at this gate. Strategic identity and understandable conversion are.
 
 ## Exit criteria
 
-- all three heroes are selectable on staging for validation;
-- normal production ownership rules remain intact;
-- every successful action ends the acting side's turn exactly once;
-- no Step / Sever / follow-up timing state remains in the active runtime;
-- each hero produces a recognizably different match plan on the same board;
+R3.1 closes when:
+
+- all three heroes are playable on staging through the same fixed turn topology;
+- no retired Architect/Swordmaster/Blink gameplay path is active;
+- each hero produces a recognizably different setup → entitlement → conversion loop;
+- strong topology-changing abilities have board-earned or tactically constrained power budgets appropriate to their impact;
+- each hero has understandable counterplay;
+- Easy/Normal CPU behavior does not contradict the hero identity in common situations;
 - no P0/P1 hero-specific or turn-flow blocker remains.
+
+Only after this baseline is proven should RENZU evaluate a fourth/fifth hero or reconsider alternate turn topology.

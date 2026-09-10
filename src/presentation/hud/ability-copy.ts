@@ -1,7 +1,6 @@
 import type { AbilityId } from '../../heroes/domain/hero-definition';
 
 const abilityHelp: Record<AbilityId, string> = {
-  blink: 'MOVE AN UNGUARDED ALLY TO AN OPEN POINT',
   guard: 'PROTECT A FRIENDLY STONE TEMPORARILY',
   charge: 'ADVANCE 1 · PUSH IF THE NEXT POINT IS OPEN',
   bulwark: 'GUARD AN ANCHOR AND ADJACENT FRIENDLIES',
