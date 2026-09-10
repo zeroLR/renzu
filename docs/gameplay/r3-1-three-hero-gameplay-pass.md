@@ -14,23 +14,25 @@ Architect and Swordmaster are not part of the active product roster. Blink is al
 
 ## Fixed turn topology
 
-Every legal player or CPU action completes exactly one logical turn:
+Every successful player or CPU turn resolves exactly once:
 
 ```text
-Player action
+Player logical turn
   ↓
-resolve board / economy / passive
+resolve placement / full-turn ability
   ↓
 CPU THINKING
   ↓
-CPU action
+CPU logical turn
   ↓
-resolve board / economy / passive
+resolve placement / full-turn ability
   ↓
-Player turn
+Player logical turn
 ```
 
-No active hero may add a precommit phase, triggered follow-up phase, chained after-step phase, or optional end-turn branch during this baseline pass.
+A low-power placement support may be prepared before placement, but it must resolve inside the same final `PlaceAction`; it does not create an intermediate domain phase or another free-form action.
+
+No active hero may add a triggered follow-up phase, chained after-step phase, or optional end-turn branch during this baseline pass.
 
 ## Current gameplay findings
 
@@ -41,37 +43,47 @@ Staging validation exposed an identity/conversion imbalance rather than a simple
 - **Shade:** Corrupt can repeatedly disrupt the opponent, but disruption does not yet convert cleanly into the Shade player's own winning pressure.
 - **Cross-system:** abilities that directly alter stone topology are materially stronger than passive protection or temporary denial and need a correspondingly larger power budget.
 
-The next design work therefore focuses on **board-earned entitlement**, not broad cooldown/Mana tuning.
+The design work therefore focuses on **board-earned entitlement and action-cost fit**, not broad cooldown/Mana tuning.
 
 ## R3.1.1 — Hero Power Budget & Pattern Mastery
 
 Authoritative spec: [`r3-1-1-hero-power-budget-pattern-mastery.md`](r3-1-1-hero-power-budget-pattern-mastery.md).
 
-Goals:
+Delivered foundation:
 
-- retire Blink cleanly;
-- classify ability power by how directly it changes stone topology;
-- enrich placement outcomes with semantic pattern events such as open-three, closed-four, open-four, and multi-threat;
-- establish a generic Pattern Mastery accumulator that can unlock a future power without granting extra actions;
-- preserve current turn topology and existing passive reward behavior.
+- Blink retired cleanly;
+- ability power classified by topology impact;
+- semantic pattern events such as open-three, closed-four, open-four, and multi-threat;
+- generic Pattern Mastery accumulation without extra actions;
+- current passive reward behavior preserved.
 
 R3.1.1 deliberately does not decide the final Charge/Phase/Corrupt mastery thresholds.
 
 ## R3.1.2 — Three-Hero Ability Rework
 
-After the shared grammar is stable, redesign the three hero conversion loops:
+### Action-cost prototype
+
+Authoritative spec: [`r3-1-2-action-cost-rework.md`](r3-1-2-action-cost-rework.md).
+
+The first R3.1.2 slice validates that ability cost can differ without changing logical-turn ownership:
+
+- **Guard:** placement support. Select an existing ally, then make a normal placement. Both resolve as one logical turn.
+- **Seal:** remains a full-turn ability but persists for two complete opponent turns.
+- **Charge / Bulwark / Phase / Corrupt:** remain full-turn abilities for this slice.
+
+This separates low-topology support value from higher-impact board mutation before Pattern Mastery is connected to finishers.
 
 ### Vanguard — Convert
 
 **Question:** What board achievement should entitle the player to a high-impact Charge conversion?
 
-Goal: keep Charge recognizable and powerful without letting cooldown alone turn a near-four into a routine forced finish.
+Goal: keep Charge recognizable and powerful without letting cooldown alone turn a near-four into a routine forced finish. Guard should support ordinary board development without competing directly with the value of placing a stone.
 
 ### Arcanist — Shape
 
 **Question:** How does accumulated pattern value let the Arcanist remove enough valid responses that a normal Gomoku threat becomes forced?
 
-Goal: establish a clear control → winning continuation loop without giving Arcanist a generic direct finisher.
+Goal: establish a clear control → winning continuation loop without giving Arcanist a generic direct finisher. Seal's longer duration should create persistent precision control distinct from Phase's short burst zoning.
 
 ### Shade — Break → Exploit
 
@@ -81,13 +93,14 @@ Goal: preserve contact/removal identity while giving the hero a route from disru
 
 ## Identity quality bar
 
-R3.1 is successful when all three heroes share the same turn structure but differ in:
+R3.1 is successful when all three heroes share the same logical-turn structure but differ in:
 
 1. **Board-reading priority** — what positions attract attention.
 2. **Economy cadence** — how useful board play earns access to stronger actions.
 3. **Conversion loop** — how setup becomes an actual path toward victory.
-4. **Counterplay** — how the opponent interrupts that loop through board decisions.
-5. **CPU behavior** — Easy / Normal use the same engine in ways that support the intended identity.
+4. **Action cost** — whether an effect supplements or replaces a normal placement in proportion to its tactical impact.
+5. **Counterplay** — how the opponent interrupts that loop through board decisions.
+6. **CPU behavior** — Easy / Normal use the same engine in ways that support the intended identity.
 
 Perfect matchup balance is not required at this gate. Strategic identity and understandable conversion are.
 
@@ -95,8 +108,9 @@ Perfect matchup balance is not required at this gate. Strategic identity and und
 
 R3.1 closes when:
 
-- all three heroes are playable on staging through the same fixed turn topology;
+- all three heroes are playable on staging through the same fixed logical-turn topology;
 - no retired Architect/Swordmaster/Blink gameplay path is active;
+- low-power support and full-turn abilities have understandable action costs;
 - each hero produces a recognizably different setup → entitlement → conversion loop;
 - strong topology-changing abilities have board-earned or tactically constrained power budgets appropriate to their impact;
 - each hero has understandable counterplay;
