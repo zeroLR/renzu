@@ -23,7 +23,6 @@ export interface AbilityAction {
 }
 
 const SUPPORTED_ABILITIES = new Set<AbilityId>([
-  'blink',
   'guard',
   'charge',
   'bulwark',
@@ -77,8 +76,7 @@ export function listLegalAbilityActions(
   const abilities = heroes[heroId].skillPool.filter((abilityId) => SUPPORTED_ABILITIES.has(abilityId));
 
   for (const abilityId of abilities) {
-    const needsSource = abilityId === 'blink' || abilityId === 'charge';
-    if (needsSource) {
+    if (abilityId === 'charge') {
       for (const source of sources) {
         for (const target of targets) {
           const candidate: AbilityAction = { kind: 'ability', actor, heroId, abilityId, target, source };
