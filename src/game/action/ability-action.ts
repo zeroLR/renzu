@@ -36,6 +36,7 @@ export type AbilityActionError =
   | 'wrong-phase'
   | 'ability-unavailable'
   | 'activation-unavailable'
+  | 'requires-placement'
   | 'invalid-target';
 
 export type AbilityActionResult =
@@ -43,7 +44,6 @@ export type AbilityActionResult =
   | { ok: false; state: AbilityActionState; consumedTurn: false; error: AbilityActionError };
 
 const DEFAULT_ACTIVATIONS: Partial<Record<AbilityId, AbilityActivationRule>> = {
-  guard: { kind: 'resource', resourceId: 'mana', amount: 2 },
   seal: { kind: 'resource', resourceId: 'mana', amount: 2 },
   corrupt: { kind: 'resource', resourceId: 'mana', amount: 3 },
   charge: { kind: 'resource', resourceId: 'mana', amount: 3 },
@@ -93,10 +93,7 @@ function resolveBoardMutation(state: AbilityActionState, intent: AbilityIntent):
 
   if (!isInsideBoard(board, target.row, target.col)) return null;
 
-  if (abilityId === 'guard') {
-    if (board[target.row][target.col] !== actor || isGuarded(effects, target)) return null;
-    effects.push(createBoardEffect('guard', target, actor, { kind: 'owner-turns', remaining: 2 }));
-  } else if (abilityId === 'bulwark') {
+  if (abilityId === 'bulwark') {
     if (board[target.row][target.col] !== actor || isGuarded(effects, target)) return null;
     const adjacentFriendly = adjacentFriendlyPositions(board, target, actor);
     if (adjacentFriendly.length === 0) return null;
@@ -107,7 +104,7 @@ function resolveBoardMutation(state: AbilityActionState, intent: AbilityIntent):
     }
   } else if (abilityId === 'seal') {
     if (board[target.row][target.col] !== 0 || isBlocked(effects, target)) return null;
-    effects.push(createBoardEffect('seal', target, actor, { kind: 'opponent-turns', remaining: 1 }));
+    effects.push(createBoardEffect('seal', target, actor, { kind: 'opponent-turns', remaining: 2 }));
   } else if (abilityId === 'corrupt') {
     if (board[target.row][target.col] !== enemy || isGuarded(effects, target) || !hasAdjacentFriendly(board, target, actor)) return null;
     board[target.row][target.col] = 0;
@@ -145,6 +142,7 @@ export function resolveAbilityAction(state: AbilityActionState, intent: AbilityI
   if (state.match.status !== 'playing') return { ok: false, state, consumedTurn: false, error: 'match-over' };
   if (activePlayer(state.match) !== intent.actor) return { ok: false, state, consumedTurn: false, error: 'wrong-phase' };
   if (!isAbilityAccessible(intent.heroId, intent.abilityId)) return { ok: false, state, consumedTurn: false, error: 'ability-unavailable' };
+  if (intent.abilityId === 'guard') return { ok: false, state, consumedTurn: false, error: 'requires-placement' };
 
   const activation = heroes[intent.heroId].activationOverrides[intent.abilityId] ?? DEFAULT_ACTIVATIONS[intent.abilityId];
   if (!activation) return { ok: false, state, consumedTurn: false, error: 'activation-unavailable' };
