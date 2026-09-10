@@ -2,17 +2,19 @@ import { resolveCpuTurn, type CpuTurnResult } from './cpu-turn';
 import type { GameSession } from './create-game-session';
 import { resolveSessionAction } from '../../game/action/action-session';
 import { listLegalActions, type AbilityAction, type LegalAction } from '../../game/action/legal-action';
+import { listLegalPlacementSupportTargets } from '../../game/action/placement-support';
 import type { Position } from '../../game/board/board';
 import type { AbilityId } from '../../heroes/domain/hero-definition';
 
 export interface BattleInteractionState {
   selectedAbilityId: AbilityId | null;
   selectedSource: Position | null;
+  selectedSupportTarget: Position | null;
   lastError: string | null;
   cpuThinking: boolean;
 }
 
-export type BattleTargetingPhase = 'idle' | 'select-source' | 'select-target';
+export type BattleTargetingPhase = 'idle' | 'select-source' | 'select-target' | 'select-placement';
 
 export interface BattleTargetingState {
   abilityId: AbilityId | null;
@@ -31,6 +33,7 @@ export interface BattleController {
   interaction(): BattleInteractionState;
   targeting(): BattleTargetingState;
   legalActions(): LegalAction[];
+  abilityAvailable(abilityId: AbilityId): boolean;
   selectAbility(abilityId: AbilityId): void;
   tapCell(at: Position): void;
   advanceCpuTurn(onStep?: () => void, options?: CpuChoreographyOptions): Promise<void>;
@@ -55,15 +58,48 @@ function uniquePositions(positions: readonly Position[]): Position[] {
 export function createBattleController(session: GameSession, random?: () => number): BattleController {
   let selectedAbilityId: AbilityId | null = null;
   let selectedSource: Position | null = null;
+  let selectedSupportTarget: Position | null = null;
   let lastError: string | null = null;
   let cpuThinking = false;
   let cpuSequence = 0;
 
   const legalActions = (): LegalAction[] => listLegalActions(session.state, session.config.playerHeroId, 1);
+  const guardTargets = (): Position[] => listLegalPlacementSupportTargets(
+    session.state,
+    session.config.playerHeroId,
+    1,
+    'guard',
+  );
+
+  const abilityAvailable = (abilityId: AbilityId): boolean => {
+    if (abilityId === 'guard') return guardTargets().length > 0;
+    return legalActions().some(
+      (action) => action.kind === 'ability' && action.abilityId === abilityId,
+    );
+  };
 
   const targeting = (): BattleTargetingState => {
     if (!selectedAbilityId) {
       return { abilityId: null, phase: 'idle', sources: [], targets: [] };
+    }
+
+    if (selectedAbilityId === 'guard') {
+      if (!selectedSupportTarget) {
+        return {
+          abilityId: 'guard',
+          phase: 'select-target',
+          sources: [],
+          targets: guardTargets(),
+        };
+      }
+      return {
+        abilityId: 'guard',
+        phase: 'select-placement',
+        sources: [selectedSupportTarget],
+        targets: legalActions()
+          .filter((action) => action.kind === 'place')
+          .map((action) => action.at),
+      };
     }
 
     const candidates = legalActions().filter(
@@ -143,19 +179,18 @@ export function createBattleController(session: GameSession, random?: () => numb
     session.state = result.state;
     selectedAbilityId = null;
     selectedSource = null;
+    selectedSupportTarget = null;
     lastError = null;
   };
 
   const selectAbility = (abilityId: AbilityId): void => {
-    const candidates = legalActions().filter(
-      (action): action is AbilityAction => action.kind === 'ability' && action.abilityId === abilityId,
-    );
-    if (candidates.length === 0) {
+    if (!abilityAvailable(abilityId)) {
       lastError = 'ability-unavailable';
       return;
     }
     selectedAbilityId = abilityId;
     selectedSource = null;
+    selectedSupportTarget = null;
     lastError = null;
   };
 
@@ -167,6 +202,29 @@ export function createBattleController(session: GameSession, random?: () => numb
       const direct = actions.find((action) => action.kind === 'place' && samePosition(action.at, at));
       if (direct) apply(direct);
       else lastError = 'invalid-target';
+      return;
+    }
+
+    if (selectedAbilityId === 'guard') {
+      if (!selectedSupportTarget) {
+        if (guardTargets().some((target) => samePosition(target, at))) {
+          selectedSupportTarget = at;
+          lastError = null;
+        } else {
+          lastError = 'invalid-target';
+        }
+        return;
+      }
+
+      const placement = actions.find((action) => action.kind === 'place' && samePosition(action.at, at));
+      if (placement && placement.kind === 'place') {
+        apply({
+          ...placement,
+          support: { abilityId: 'guard', target: selectedSupportTarget },
+        });
+      } else {
+        lastError = 'invalid-target';
+      }
       return;
     }
 
@@ -194,15 +252,17 @@ export function createBattleController(session: GameSession, random?: () => numb
 
   return {
     session: () => session,
-    interaction: () => ({ selectedAbilityId, selectedSource, lastError, cpuThinking }),
+    interaction: () => ({ selectedAbilityId, selectedSource, selectedSupportTarget, lastError, cpuThinking }),
     targeting,
     legalActions,
+    abilityAvailable,
     selectAbility,
     tapCell,
     advanceCpuTurn,
     clearSelection() {
       selectedAbilityId = null;
       selectedSource = null;
+      selectedSupportTarget = null;
       lastError = null;
     },
   };
