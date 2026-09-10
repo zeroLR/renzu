@@ -9,34 +9,34 @@ function createState(): AbilityActionState {
 }
 
 describe('ability action resolution', () => {
-  it('resolves Vanguard Guard through cooldown activation and records the ability action', () => {
+  it('requires Vanguard Guard to resolve as part of a placement', () => {
     const state = createState();
     state.match.board[4][4] = 1;
 
     const result = resolveAbilityAction(state, { heroId: 'vanguard', abilityId: 'guard', actor: 1, target: { row: 4, col: 4 } });
 
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.state.boardEffects).toEqual([
-      { kind: 'guard', at: { row: 4, col: 4 }, owner: 1, expiry: { kind: 'owner-turns', remaining: 1 } },
-    ]);
-    expect(result.state.abilities[1].cooldowns.guard).toBe(3);
-    expect(result.state.match.actionHistory.at(-1)?.abilityId).toBe('guard');
-    expect(result.state.match.phase).toBe('opponent');
-    expect(result.consumedTurn).toBe(true);
+    expect(result).toMatchObject({ ok: false, error: 'requires-placement', consumedTurn: false });
+    expect(state.boardEffects).toHaveLength(0);
+    expect(state.match.phase).toBe('player');
   });
 
   it('keeps a newly activated cooldown at its full value while advancing existing cooldowns', () => {
     const state = createState();
     state.match.board[4][4] = 1;
-    state.abilities[1].cooldowns.charge = 2;
+    state.abilities[1].cooldowns.guard = 2;
 
-    const result = resolveAbilityAction(state, { heroId: 'vanguard', abilityId: 'guard', actor: 1, target: { row: 4, col: 4 } });
+    const result = resolveAbilityAction(state, {
+      heroId: 'vanguard',
+      abilityId: 'charge',
+      actor: 1,
+      source: { row: 4, col: 4 },
+      target: { row: 4, col: 5 },
+    });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.state.abilities[1].cooldowns.charge).toBe(1);
-    expect(result.state.abilities[1].cooldowns.guard).toBe(3);
+    expect(result.state.abilities[1].cooldowns.guard).toBe(1);
+    expect(result.state.abilities[1].cooldowns.charge).toBe(4);
   });
 
   it('resolves Vanguard Charge as an adjacent move', () => {
