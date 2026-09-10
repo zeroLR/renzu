@@ -26,16 +26,16 @@ describe('ability action resolution', () => {
     expect(result.consumedTurn).toBe(true);
   });
 
-  it('keeps a newly activated cooldown at its full value', () => {
+  it('keeps a newly activated cooldown at its full value while advancing existing cooldowns', () => {
     const state = createState();
     state.match.board[4][4] = 1;
-    state.abilities[1].cooldowns.blink = 2;
+    state.abilities[1].cooldowns.charge = 2;
 
     const result = resolveAbilityAction(state, { heroId: 'vanguard', abilityId: 'guard', actor: 1, target: { row: 4, col: 4 } });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.state.abilities[1].cooldowns.blink).toBe(1);
+    expect(result.state.abilities[1].cooldowns.charge).toBe(1);
     expect(result.state.abilities[1].cooldowns.guard).toBe(3);
   });
 
