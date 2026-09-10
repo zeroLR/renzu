@@ -5,6 +5,7 @@ import { setAbilityResource } from '../src/heroes/economies/ability-economy';
 import { createBoardEffect } from '../src/game/combat/board-effects';
 import type { AbilityActionState } from '../src/game/action/ability-action';
 import { listLegalActions, listLegalPlaceActions } from '../src/game/action/legal-action';
+import { listLegalPlacementSupportTargets } from '../src/game/action/placement-support';
 import { resolveSessionAction } from '../src/game/action/action-session';
 
 function createState(): AbilityActionState {
@@ -26,6 +27,14 @@ describe('legal action model', () => {
     const result = resolveSessionAction(state, { kind: 'place', actor: 1, at: { row: 4, col: 4 } }, 'vanguard');
     expect(result).toMatchObject({ ok: false, error: 'blocked-target' });
     expect(state.match.board[4][4]).toBe(0);
+  });
+
+  it('keeps Guard off the standalone turn-action surface while exposing support targets', () => {
+    const state = createState();
+    state.match.board[4][4] = 1;
+    const actions = listLegalActions(state, 'vanguard', 1);
+    expect(actions.some((action) => action.kind === 'ability' && action.abilityId === 'guard')).toBe(false);
+    expect(listLegalPlacementSupportTargets(state, 'vanguard', 1, 'guard')).toEqual([{ row: 4, col: 4 }]);
   });
 
   it('exposes source-target Vanguard actions through the shared legal surface', () => {
