@@ -4,6 +4,7 @@ import type { Player, Position } from '../board/board';
 import { heroes, type AbilityId, type HeroId } from '../../heroes/domain/hero-definition';
 import type { AbilityActionState } from './ability-action';
 import { resolveAbilityAction } from './ability-action';
+import type { PlacementSupport } from './placement-support';
 
 export type LegalAction = PlaceAction | AbilityAction;
 
@@ -11,6 +12,7 @@ export interface PlaceAction {
   kind: 'place';
   actor: Player;
   at: Position;
+  support?: PlacementSupport;
 }
 
 export interface AbilityAction {
@@ -22,8 +24,7 @@ export interface AbilityAction {
   source?: Position;
 }
 
-const SUPPORTED_ABILITIES = new Set<AbilityId>([
-  'guard',
+const SUPPORTED_TURN_ABILITIES = new Set<AbilityId>([
   'charge',
   'bulwark',
   'seal',
@@ -73,7 +74,7 @@ export function listLegalAbilityActions(
   const actions: AbilityAction[] = [];
   const targets = boardPositions(state);
   const sources = ownPositions(state, actor);
-  const abilities = heroes[heroId].skillPool.filter((abilityId) => SUPPORTED_ABILITIES.has(abilityId));
+  const abilities = heroes[heroId].skillPool.filter((abilityId) => SUPPORTED_TURN_ABILITIES.has(abilityId));
 
   for (const abilityId of abilities) {
     if (abilityId === 'charge') {
