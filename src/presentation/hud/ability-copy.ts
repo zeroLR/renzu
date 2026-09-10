@@ -1,10 +1,10 @@
 import type { AbilityId } from '../../heroes/domain/hero-definition';
 
 const abilityHelp: Record<AbilityId, string> = {
-  guard: 'PROTECT A FRIENDLY STONE TEMPORARILY',
+  guard: 'PROTECT AN ALLY · THEN PLACE A STONE',
   charge: 'ADVANCE 1 · PUSH IF THE NEXT POINT IS OPEN',
   bulwark: 'GUARD AN ANCHOR AND ADJACENT FRIENDLIES',
-  seal: 'BLOCK AN EMPTY POINT TEMPORARILY',
+  seal: 'BLOCK ONE POINT FOR 2 OPPONENT TURNS',
   phase: 'PLACE + FLAME THE FOUR CARDINAL POINTS',
   corrupt: 'REMOVE A SUPPORTED ADJACENT ENEMY',
 };
