@@ -1,8 +1,7 @@
-import { resolveAiTurn } from '../../app/game-session/cpu-turn';
-import { createGameSession } from '../../app/game-session/create-game-session';
-import type { GameSession } from '../../app/game-session/create-game-session';
 import type { AiDifficultyProfile } from '../../ai/difficulty/difficulty-profile';
 import { simulateTacticalAction } from '../../ai/evaluation/tactical-simulation';
+import { resolveAiTurn } from '../../app/game-session/cpu-turn';
+import { createGameSession, type GameSession } from '../../app/game-session/create-game-session';
 import type { AbilityActionState } from '../../game/action/ability-action';
 import type { LegalAction } from '../../game/action/legal-action';
 import type { Board, Player, Position } from '../../game/board/board';
@@ -11,8 +10,8 @@ import {
   evaluatePlacementPattern,
   type PlacementPatternEventKind,
 } from '../../game/rules/placement-pattern';
+import { heroes, heroIds, type AbilityId, type HeroId } from '../../heroes/domain/hero-definition';
 import type { AbilityStates } from '../../heroes/economies/ability-state';
-import { heroIds, type AbilityId, type HeroId } from '../../heroes/domain/hero-definition';
 
 export type BalanceScope = 'pair' | 'matrix';
 export type BalanceMatchStatus = 'p1-win' | 'p2-win' | 'draw' | 'stalled' | 'error';
@@ -149,10 +148,10 @@ export function createSeededRandom(seed: number): () => number {
   let state = seed >>> 0;
   return () => {
     state += 0x6D2B79F5;
-    let t = state;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    let value = state;
+    value = Math.imul(value ^ (value >>> 15), value | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
   };
 }
 
@@ -205,8 +204,11 @@ function sessionFor(p1Hero: HeroId, p2Hero: HeroId): GameSession {
 }
 
 function abilityIdFor(action: LegalAction): AbilityId | undefined {
-  if (action.kind === 'ability') return action.abilityId;
-  return action.support?.abilityId;
+  return action.kind === 'ability' ? action.abilityId : action.support?.abilityId;
+}
+
+function actionPosition(action: LegalAction): Position {
+  return action.kind === 'place' ? action.at : action.target;
 }
 
 function increment(record: Record<string, number>, key: string, amount = 1): void {
@@ -226,18 +228,6 @@ function statusFor(state: AbilityActionState, capped: boolean, failed: boolean):
   if (state.match.status === 'defeat') return 'p2-win';
   if (state.match.status === 'draw') return 'draw';
   return 'stalled';
-}
-
-function positionKey(position: Position): string {
-  return `${position.row}:${position.col}`;
-}
-
-function countAbilityUsesById(traces: readonly BalanceActionTrace[]): Record<string, number> {
-  const uses: Record<string, number> = {};
-  for (const trace of traces) {
-    if (trace.abilityId) increment(uses, trace.abilityId);
-  }
-  return uses;
 }
 
 function winningConversionAbility(
@@ -262,8 +252,7 @@ function simulateOneMatch(
   includeSnapshots: boolean,
 ): RawMatchRun {
   const random = createSeededRandom(scheduled.seed);
-  const session = sessionFor(scheduled.p1Hero, scheduled.p2Hero);
-  let state = session.state;
+  let state = sessionFor(scheduled.p1Hero, scheduled.p2Hero).state;
   const traces: BalanceActionTrace[] = [];
   const snapshots = includeSnapshots ? [cloneActionState(state)] : undefined;
   const abilityUses: Record<string, number> = {};
@@ -290,12 +279,12 @@ function simulateOneMatch(
     const abilityId = abilityIdFor(action);
     const tactical = simulateTacticalAction(before, action, actor, heroId);
     const next = turn.state;
-    const events = action.kind === 'place'
+    const patternEventsForAction = action.kind === 'place'
       ? evaluatePlacementPattern(next.match.board, action.at, actor, before.boardEffects).events.map((event) => event.kind)
       : [];
 
     if (abilityId) increment(abilityUses, abilityId);
-    for (const event of events) increment(patternEvents, event);
+    for (const event of patternEventsForAction) increment(patternEvents, event);
 
     traces.push({
       index: actionIndex,
@@ -304,11 +293,11 @@ function simulateOneMatch(
       heroId,
       kind: action.kind,
       abilityId,
-      at: { ...action.at },
+      at: { ...actionPosition(action) },
       source: action.kind === 'ability' && action.source ? { ...action.source } : undefined,
       score: turn.decision.score,
       reasons: [...turn.decision.reasons],
-      patternEvents: events,
+      patternEvents: patternEventsForAction,
       enemyThreatsBefore: tactical?.enemyThreatsBefore ?? 0,
       enemyThreatsAfter: tactical?.enemyThreatsAfter ?? 0,
       ownLineBefore: tactical?.ownLineBefore ?? 0,
@@ -326,11 +315,11 @@ function simulateOneMatch(
   const capped = state.match.status === 'playing' && traces.length >= config.maxActions;
   const winner = winnerFor(state);
   const status = statusFor(state, capped, failed);
-  const baseFlags: string[] = [];
-  if (status === 'stalled') baseFlags.push('STALLED');
-  if (status === 'error') baseFlags.push('SIMULATION_ERROR');
+  const flags: string[] = [];
+  if (status === 'stalled') flags.push('STALLED');
+  if (status === 'error') flags.push('SIMULATION_ERROR');
   const conversionAbility = winningConversionAbility(traces, winner);
-  if (conversionAbility) baseFlags.push('ABILITY_CONVERSION');
+  if (conversionAbility) flags.push('ABILITY_CONVERSION');
 
   return {
     summary: {
@@ -344,7 +333,7 @@ function simulateOneMatch(
       abilityUses,
       patternEvents,
       conversionAbility,
-      flags: baseFlags,
+      flags,
     },
     traces,
     snapshots,
@@ -352,11 +341,12 @@ function simulateOneMatch(
 }
 
 function buildSchedule(config: BalanceLabConfig): ScheduledMatch[] {
-  const scheduled: ScheduledMatch[] = [];
+  const matches: ScheduledMatch[] = [];
   let id = 1;
+
   const pushSeat = (p1Hero: HeroId, p2Hero: HeroId): void => {
     for (let gameIndex = 0; gameIndex < config.gamesPerSeat; gameIndex += 1) {
-      scheduled.push({
+      matches.push({
         id: id++,
         seed: config.seed + gameIndex * 9973,
         p1Hero,
@@ -369,12 +359,12 @@ function buildSchedule(config: BalanceLabConfig): ScheduledMatch[] {
     for (const p1Hero of heroIds) {
       for (const p2Hero of heroIds) pushSeat(p1Hero, p2Hero);
     }
-    return scheduled;
+    return matches;
   }
 
   pushSeat(config.heroA, config.heroB);
   if (config.swapSeats && config.heroA !== config.heroB) pushSeat(config.heroB, config.heroA);
-  return scheduled;
+  return matches;
 }
 
 function percentile(values: readonly number[], fraction: number): number {
@@ -413,33 +403,56 @@ function summarizeMatchups(matches: readonly BalanceMatchSummary[]): BalanceMatc
   });
 }
 
+function tallySeatOutcome(
+  match: BalanceMatchSummary,
+  seat: Player,
+  totals: { wins: number; losses: number; draws: number },
+): void {
+  if (match.status === 'draw') {
+    totals.draws += 1;
+    return;
+  }
+  if (match.status !== 'p1-win' && match.status !== 'p2-win') return;
+  const seatWon = (seat === 1 && match.status === 'p1-win') || (seat === 2 && match.status === 'p2-win');
+  if (seatWon) totals.wins += 1;
+  else totals.losses += 1;
+}
+
 function summarizeHeroes(matches: readonly BalanceMatchSummary[]): BalanceHeroSummary[] {
   return heroIds.map((heroId) => {
     let games = 0;
-    let wins = 0;
-    let losses = 0;
-    let draws = 0;
     let abilityUses = 0;
+    const totals = { wins: 0, losses: 0, draws: 0 };
+    const heroAbilities = heroes[heroId].skillPool;
 
     for (const match of matches) {
       const p1 = match.p1Hero === heroId;
       const p2 = match.p2Hero === heroId;
       if (!p1 && !p2) continue;
-      games += 1;
-      if (match.status === 'draw') draws += 1;
-      else if ((p1 && match.status === 'p1-win') || (p2 && match.status === 'p2-win')) wins += 1;
-      else if ((p1 && match.status === 'p2-win') || (p2 && match.status === 'p1-win')) losses += 1;
-      abilityUses += Object.values(match.abilityUses).reduce((sum, count) => sum + count, 0);
+
+      if (p1) {
+        games += 1;
+        tallySeatOutcome(match, 1, totals);
+      }
+      if (p2) {
+        games += 1;
+        tallySeatOutcome(match, 2, totals);
+      }
+
+      abilityUses += heroAbilities.reduce(
+        (sum, abilityId) => sum + (match.abilityUses[abilityId] ?? 0),
+        0,
+      );
     }
 
-    const resolved = Math.max(1, wins + losses + draws);
+    const resolved = Math.max(1, totals.wins + totals.losses + totals.draws);
     return {
       heroId,
       games,
-      wins,
-      losses,
-      draws,
-      winRate: wins / resolved,
+      wins: totals.wins,
+      losses: totals.losses,
+      draws: totals.draws,
+      winRate: totals.wins / resolved,
       abilityUsesPerGame: games ? abilityUses / games : 0,
     };
   }).filter((summary) => summary.games > 0);
@@ -454,12 +467,14 @@ function conversionSummaries(matches: readonly BalanceMatchSummary[]): BalanceCo
     if (match.conversionAbility) increment(conversionCounts, match.conversionAbility);
   }
 
-  return Object.entries(useCounts).map(([abilityId, uses]) => ({
-    abilityId: abilityId as AbilityId,
-    uses,
-    winsWithinTwoOwnActions: conversionCounts[abilityId] ?? 0,
-    rate: uses ? (conversionCounts[abilityId] ?? 0) / uses : 0,
-  })).sort((a, b) => b.rate - a.rate);
+  return Object.entries(useCounts)
+    .map(([abilityId, uses]) => ({
+      abilityId: abilityId as AbilityId,
+      uses,
+      winsWithinTwoOwnActions: conversionCounts[abilityId] ?? 0,
+      rate: uses ? (conversionCounts[abilityId] ?? 0) / uses : 0,
+    }))
+    .sort((a, b) => b.rate - a.rate);
 }
 
 function annotateAnomalies(
@@ -515,6 +530,7 @@ export async function runBalanceSimulation(
   const matches = annotateAnomalies(rawMatches, p10Actions, p90Actions);
   const abilityUses: Record<string, number> = {};
   const patternEvents: Record<string, number> = {};
+
   for (const match of matches) {
     for (const [key, count] of Object.entries(match.abilityUses)) increment(abilityUses, key, count);
     for (const [key, count] of Object.entries(match.patternEvents)) increment(patternEvents, key, count);
@@ -523,17 +539,17 @@ export async function runBalanceSimulation(
   const p1Wins = matches.filter((match) => match.status === 'p1-win').length;
   const draws = matches.filter((match) => match.status === 'draw').length;
   const stalled = matches.filter((match) => match.status === 'stalled').length;
-  const resolved = Math.max(1, matches.filter((match) => match.status !== 'error' && match.status !== 'stalled').length);
+  const resolved = Math.max(
+    1,
+    matches.filter((match) => match.status !== 'error' && match.status !== 'stalled').length,
+  );
   const anomalies = matches
     .filter((match) => match.flags.length > 0)
     .sort((a, b) => anomalyScore(b) - anomalyScore(a) || b.actions - a.actions)
     .slice(0, 24);
 
   return {
-    config: {
-      ...config,
-      profile: { ...config.profile },
-    },
+    config: { ...config, profile: { ...config.profile } },
     totalGames: matches.length,
     p1WinRate: p1Wins / resolved,
     drawRate: draws / resolved,
@@ -554,12 +570,14 @@ export async function runBalanceSimulation(
 export function replayBalanceMatch(result: BalanceRunResult, matchId: number): BalanceReplay | null {
   const match = result.matches.find((candidate) => candidate.id === matchId);
   if (!match) return null;
+
   const replay = simulateOneMatch({
     id: match.id,
     seed: match.seed,
     p1Hero: match.p1Hero,
     p2Hero: match.p2Hero,
   }, result.config, true);
+
   return {
     match: { ...match },
     actions: replay.traces,
@@ -573,6 +591,7 @@ export function createTakeoverSession(
 ): GameSession | null {
   const snapshot = replay.snapshots[snapshotIndex];
   if (!snapshot || snapshot.match.status !== 'playing' || snapshot.match.phase !== 'player') return null;
+
   return {
     config: {
       mode: { kind: 'free-battle' },
@@ -582,6 +601,10 @@ export function createTakeoverSession(
     },
     state: cloneActionState(snapshot),
   };
+}
+
+function positionKey(position: Position): string {
+  return `${position.row}:${position.col}`;
 }
 
 export function compactBoard(board: Board): string {
