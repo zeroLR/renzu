@@ -10,4 +10,5 @@
 - [`qa/r3-1-three-hero-gameplay-matrix.md`](qa/r3-1-three-hero-gameplay-matrix.md) — R3.1 staging validation matrix
 - [`gameplay/r3-1-three-hero-gameplay-pass.md`](gameplay/r3-1-three-hero-gameplay-pass.md) — R3.1 hero identity contracts and fixed-turn exit criteria
 - [`gameplay/r3-1-1-hero-power-budget-pattern-mastery.md`](gameplay/r3-1-1-hero-power-budget-pattern-mastery.md) — R3.1.1 ability power-budget and Pattern Mastery grammar
-- [`gameplay/r3-1-2-action-cost-rework.md`](gameplay/r3-1-2-action-cost-rework.md) — R3.1.2 placement-support Guard and two-opponent-turn Seal contract
+- [`gameplay/r3-1-2-action-cost-rework.md`](gameplay/r3-1-2-action-cost-rework.md) — R3.1.2 placement-support and effect-duration contract
+- [`debug/balance-lab.md`](debug/balance-lab.md) — `?debug=1` CPU self-play, metrics, anomaly inspection, and human takeover workflow
