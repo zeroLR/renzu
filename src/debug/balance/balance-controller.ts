@@ -207,7 +207,10 @@ export function createBalanceLabController(): BalanceLabController {
       const step = nearestPlayerStep();
       if (step === null) return false;
       replayStep = step;
-      takeoverSession = createTakeoverSession(replay, step);
+      const session = createTakeoverSession(replay, step);
+      takeoverSession = session
+        ? { ...session, cpuProfileOverride: { ...result.config.profile } }
+        : null;
       return takeoverSession !== null;
     },
     clearTakeover() {
