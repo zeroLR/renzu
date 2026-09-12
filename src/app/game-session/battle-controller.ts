@@ -1,5 +1,6 @@
 import { resolveCpuTurn, type CpuTurnResult } from './cpu-turn';
 import type { GameSession } from './create-game-session';
+import type { AiDifficultyProfile } from '../../ai/difficulty/difficulty-profile';
 import { resolveSessionAction } from '../../game/action/action-session';
 import { listLegalActions, type AbilityAction, type LegalAction } from '../../game/action/legal-action';
 import { listLegalPlacementSupportTargets } from '../../game/action/placement-support';
@@ -55,7 +56,11 @@ function uniquePositions(positions: readonly Position[]): Position[] {
   return unique;
 }
 
-export function createBattleController(session: GameSession, random?: () => number): BattleController {
+export function createBattleController(
+  session: GameSession,
+  random?: () => number,
+  cpuProfile?: AiDifficultyProfile,
+): BattleController {
   let selectedAbilityId: AbilityId | null = null;
   let selectedSource: Position | null = null;
   let selectedSupportTarget: Position | null = null;
@@ -155,6 +160,7 @@ export function createBattleController(session: GameSession, random?: () => numb
     const result: CpuTurnResult = resolveCpuTurn(session.state, {
       heroId: session.config.cpuHeroId,
       difficulty: session.config.cpuDifficulty,
+      profile: cpuProfile,
       random,
     });
     if (!result.ok) {
