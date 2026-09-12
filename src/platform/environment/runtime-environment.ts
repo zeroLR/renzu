@@ -9,3 +9,8 @@ export function runtimeEnvironment(): RenzuRuntimeEnvironment {
 export function heroRosterValidationEnabled(): boolean {
   return runtimeEnvironment() !== 'production';
 }
+
+export function debugToolsEnabled(search?: string): boolean {
+  const query = search ?? (typeof window !== 'undefined' ? window.location.search : '');
+  return new URLSearchParams(query).get('debug') === '1';
+}

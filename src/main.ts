@@ -1,7 +1,9 @@
 import { createRenderer } from './app/bootstrap/create-renderer';
 import { createProductFlow } from './app/game-session/product-flow';
 import { createAppRouter } from './app/routing/router';
-import { heroRosterValidationEnabled } from './platform/environment/runtime-environment';
+import { createBalanceLabController } from './debug/balance/balance-controller';
+import { createDebugAppShell } from './debug/balance/debug-app-shell';
+import { debugToolsEnabled, heroRosterValidationEnabled } from './platform/environment/runtime-environment';
 import { createBrowserPlayerProfileStorage } from './platform/storage/player-profile-storage';
 import { createProductShell } from './presentation/screens/product-shell';
 import './style.css';
@@ -27,14 +29,17 @@ async function bootstrap(): Promise<void> {
     const flow = createProductFlow(profileStorage, {
       allowLockedFreeBattleHeroes: heroRosterValidationEnabled(),
     });
-    const shell = createProductShell(router, flow);
+    const productShell = createProductShell(router, flow);
+    const shell = debugToolsEnabled()
+      ? createDebugAppShell(productShell, createBalanceLabController())
+      : productShell;
 
     app.stage.addChild(shell.root);
     host.replaceChildren(app.canvas);
     shell.resize(app.screen.width, app.screen.height);
 
     app.renderer.on('resize', (width, height) => shell.resize(width, height));
-    console.info('[RENZU] Product shell bootstrap complete.');
+    console.info(`[RENZU] Product shell bootstrap complete${debugToolsEnabled() ? ' · DEBUG LAB ENABLED' : ''}.`);
   } catch (error) {
     renderBootstrapFailure(error);
   }
