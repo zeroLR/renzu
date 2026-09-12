@@ -4,9 +4,7 @@ export type AppRoute =
   | { screen: 'story' }
   | { screen: 'free-battle' }
   | { screen: 'heroes' }
-  | { screen: 'battle' }
-  | { screen: 'debug-balance' }
-  | { screen: 'debug-battle' };
+  | { screen: 'battle' };
 
 export interface AppRouter {
   current(): AppRoute;
