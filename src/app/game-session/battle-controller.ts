@@ -160,7 +160,7 @@ export function createBattleController(
     const result: CpuTurnResult = resolveCpuTurn(session.state, {
       heroId: session.config.cpuHeroId,
       difficulty: session.config.cpuDifficulty,
-      profile: cpuProfile,
+      profile: cpuProfile ?? session.cpuProfileOverride,
       random,
     });
     if (!result.ok) {
