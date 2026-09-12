@@ -1,9 +1,8 @@
 import { Container, Graphics } from 'pixi.js';
-import { createBattleController } from '../../app/game-session/battle-controller';
 import { actionButton, label } from '../../design-system/components/primitives';
-import { color, layout, type } from '../../design-system/tokens/tokens';
+import { color, layout } from '../../design-system/tokens/tokens';
 import { renderBattleScreen } from '../../presentation/screens/battle-screen';
-import { renderBalanceLabScreen, type BalanceLabView } from './balance-screen';
+import { renderBalanceLabScreen, type BalanceLabView } from './balance-lab-screen';
 import type { BalanceLabController } from './balance-controller';
 
 export interface DebugBalanceShell {
@@ -80,7 +79,7 @@ export function createDebugBalanceShell(
           render();
           return;
         }
-        if (view === 'results') {
+        if (view === 'results' || view === 'cpu') {
           view = 'setup';
           render();
           return;
@@ -88,6 +87,10 @@ export function createDebugBalanceShell(
         onExit();
       },
       onChange: render,
+      onCpuTuning() {
+        view = 'cpu';
+        render();
+      },
       onRunComplete() {
         view = 'results';
         render();
