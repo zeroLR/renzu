@@ -89,7 +89,7 @@ describe('debug balance lab', () => {
       };
     });
 
-    console.info('ARcanist mirror diagnostics', diagnostics);
+    console.info('Arcanist mirror diagnostics', JSON.stringify(diagnostics));
     expect(diagnostics.every(({ result }) => result.failure !== null)).toBe(true);
   });
 
