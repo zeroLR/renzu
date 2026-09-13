@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { aiDifficulty } from '../src/ai/difficulty/difficulty-profile';
 import { resolveAiTurn } from '../src/app/game-session/cpu-turn';
 import { createGameSession } from '../src/app/game-session/create-game-session';
+import { diagnoseBalanceMatch } from '../src/debug/balance/balance-diagnostics';
 import {
   createTakeoverSession,
   replayBalanceMatch,
@@ -71,6 +72,25 @@ describe('debug balance lab', () => {
     expect(result.totalGames).toBe(9);
     expect(result.matchups).toHaveLength(9);
     expect(new Set(result.matchups.map((item) => `${item.p1Hero}>${item.p2Hero}`)).size).toBe(9);
+  });
+
+  it('diagnoses the observed arcanist mirror anomaly seeds', () => {
+    const matchIds = [204, 206, 223, 227, 230, 240, 250];
+    const diagnostics = matchIds.map((matchId) => {
+      const gameIndex = matchId - 201;
+      return {
+        matchId,
+        result: diagnoseBalanceMatch({
+          p1Hero: 'arcanist',
+          p2Hero: 'arcanist',
+          seed: 1337 + gameIndex * 9973,
+          maxActions: 120,
+        }),
+      };
+    });
+
+    console.info('ARcanist mirror diagnostics', diagnostics);
+    expect(diagnostics.every(({ result }) => result.failure !== null)).toBe(true);
   });
 
   it('can replay a flagged match and create a playable P1 takeover snapshot', async () => {
