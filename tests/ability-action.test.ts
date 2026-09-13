@@ -8,6 +8,15 @@ function createState(): AbilityActionState {
   return { match: createMatchState(), abilities: createAbilityStates(), boardEffects: [] };
 }
 
+function fillBoardExcept(state: AbilityActionState, empties: readonly { row: number; col: number }[]): void {
+  const emptyKeys = new Set(empties.map((at) => `${at.row}:${at.col}`));
+  for (let row = 0; row < state.match.board.length; row += 1) {
+    for (let col = 0; col < state.match.board[row].length; col += 1) {
+      state.match.board[row][col] = emptyKeys.has(`${row}:${col}`) ? 0 : 2;
+    }
+  }
+}
+
 describe('ability action resolution', () => {
   it('requires Vanguard Guard to resolve as part of a placement', () => {
     const state = createState();
@@ -102,5 +111,44 @@ describe('ability action resolution', () => {
     expect(result.state.boardEffects.filter((effect) => effect.kind === 'flame')).toHaveLength(4);
     expect(result.state.boardEffects.filter((effect) => effect.kind === 'seal')).toHaveLength(0);
     expect(result.state.match.phase).toBe('opponent');
+  });
+
+  it('rejects a long-lived Seal that would create a deterministic future placement hard lock', () => {
+    let state = createState();
+    state = { ...state, abilities: setAbilityResource(state.abilities, 1, 'mana', 5) };
+    fillBoardExcept(state, [
+      { row: 0, col: 0 },
+      { row: 0, col: 1 },
+      { row: 0, col: 2 },
+    ]);
+
+    const result = resolveAbilityAction(state, {
+      heroId: 'arcanist',
+      abilityId: 'seal',
+      actor: 1,
+      target: { row: 0, col: 0 },
+    });
+
+    expect(result).toMatchObject({ ok: false, error: 'invalid-target' });
+  });
+
+  it('allows Seal when enough placement runway remains for its two-opponent-turn lifetime', () => {
+    let state = createState();
+    state = { ...state, abilities: setAbilityResource(state.abilities, 1, 'mana', 5) };
+    fillBoardExcept(state, [
+      { row: 0, col: 0 },
+      { row: 0, col: 1 },
+      { row: 0, col: 2 },
+      { row: 0, col: 3 },
+    ]);
+
+    const result = resolveAbilityAction(state, {
+      heroId: 'arcanist',
+      abilityId: 'seal',
+      actor: 1,
+      target: { row: 0, col: 0 },
+    });
+
+    expect(result.ok).toBe(true);
   });
 });
