@@ -51,6 +51,8 @@ const DEFAULT_ACTIVATIONS: Partial<Record<AbilityId, AbilityActivationRule>> = {
   phase: { kind: 'resource', resourceId: 'mana', amount: 3 },
 };
 
+const DENIAL_ABILITIES = new Set<AbilityId>(['seal', 'phase', 'corrupt']);
+
 function cloneBoard(board: Board): Board {
   return board.map((row) => [...row]);
 }
@@ -83,6 +85,63 @@ function cardinalOpenCells(board: Board, effects: readonly BoardEffect[], target
       && board[position.row][position.col] === 0
       && !isBlocked(effects, position),
     );
+}
+
+function openPlacementPositions(board: Board, effects: readonly BoardEffect[]): Position[] {
+  const positions: Position[] = [];
+  for (let row = 0; row < board.length; row += 1) {
+    for (let col = 0; col < board[row].length; col += 1) {
+      if (board[row][col] !== 0) continue;
+      const at = { row, col };
+      if (!isBlocked(effects, at)) positions.push(at);
+    }
+  }
+  return positions;
+}
+
+function hasEmptyCell(board: Board): boolean {
+  return board.some((row) => row.some((cell) => cell === 0));
+}
+
+/**
+ * Denial may shape future placement choices, but it must not create a
+ * deterministic no-placement turn while its temporary blockers are alive.
+ *
+ * We simulate the conservative placement-only runway from the next actor.
+ * Because temporary blockers expire only through turn advancement, consuming
+ * one currently open intersection per turn is the shortest path to a lock.
+ */
+function preservesPlacementRunway(
+  board: Board,
+  effects: readonly BoardEffect[],
+  actor: Player,
+): boolean {
+  const simulatedBoard = cloneBoard(board);
+  let simulatedEffects = effects.map((effect) => ({
+    ...effect,
+    at: { ...effect.at },
+    expiry: { ...effect.expiry },
+  }));
+  let nextActor: Player = actor === 1 ? 2 : 1;
+
+  for (let step = 0; step < 16; step += 1) {
+    if (!hasEmptyCell(simulatedBoard)) return true;
+
+    const placements = openPlacementPositions(simulatedBoard, simulatedEffects);
+    if (placements.length === 0) return false;
+
+    const blockingEffectsRemain = simulatedEffects.some((effect) =>
+      effect.kind === 'seal' || effect.kind === 'flame' || effect.kind === 'corruption',
+    );
+    if (!blockingEffectsRemain) return true;
+
+    const at = placements[0];
+    simulatedBoard[at.row][at.col] = nextActor;
+    simulatedEffects = [...advanceBoardEffectsAfterTurn(simulatedEffects, nextActor)];
+    nextActor = nextActor === 1 ? 2 : 1;
+  }
+
+  return true;
 }
 
 function resolveBoardMutation(state: AbilityActionState, intent: AbilityIntent): AbilityActionState | null {
@@ -153,6 +212,14 @@ export function resolveAbilityAction(state: AbilityActionState, intent: AbilityI
   const mutated = resolveBoardMutation(state, intent);
   if (!mutated) return { ok: false, state, consumedTurn: false, error: 'invalid-target' };
 
+  const boardChangedAtTarget = mutated.match.board[intent.target.row]?.[intent.target.col] === intent.actor;
+  const winsAtTarget = boardChangedAtTarget && isWinningMove(mutated.match.board, intent.target, intent.actor);
+  if (DENIAL_ABILITIES.has(intent.abilityId)
+    && !winsAtTarget
+    && !preservesPlacementRunway(mutated.match.board, mutated.boardEffects, intent.actor)) {
+    return { ok: false, state, consumedTurn: false, error: 'invalid-target' };
+  }
+
   const advancedAbilities = advanceAbilityEconomyAfterTurn(mutated.abilities, intent.actor);
   const consumedAbilities = consumeActivation(advancedAbilities, intent.actor, activation, intent.abilityId);
   const passive = applyAfterAbilityPassive(consumedAbilities, intent.heroId, intent.actor);
@@ -164,8 +231,7 @@ export function resolveAbilityAction(state: AbilityActionState, intent: AbilityI
     abilityId: intent.abilityId,
   });
 
-  const boardChangedAtTarget = match.board[intent.target.row]?.[intent.target.col] === intent.actor;
-  if (boardChangedAtTarget && isWinningMove(match.board, intent.target, intent.actor)) {
+  if (winsAtTarget) {
     match = endMatch(match, intent.actor === 1 ? 'victory' : 'defeat');
   } else if (isBoardFull(match)) {
     match = endMatch(match, 'draw');
