@@ -1,6 +1,7 @@
 import { aiDifficulty, type AiDifficultyProfile } from '../../ai/difficulty/difficulty-profile';
 import type { GameSession } from '../../app/game-session/create-game-session';
 import type { HeroId } from '../../heroes/domain/hero-definition';
+import { diagnoseBalanceMatch, type BalanceDiagnosticResult } from './balance-diagnostics';
 import {
   createSeededRandom,
   createTakeoverSession,
@@ -24,6 +25,7 @@ export interface BalanceLabSnapshot {
   resultsTab: BalanceResultsTab;
   replay: BalanceReplay | null;
   replayStep: number;
+  diagnostic: BalanceDiagnosticResult | null;
   takeoverSession: GameSession | null;
 }
 
@@ -89,6 +91,7 @@ export function createBalanceLabController(): BalanceLabController {
   let resultsTab: BalanceResultsTab = 'overview';
   let replay: BalanceReplay | null = null;
   let replayStep = 0;
+  let diagnostic: BalanceDiagnosticResult | null = null;
   let takeoverSession: GameSession | null = null;
 
   const snapshot = (): BalanceLabSnapshot => ({
@@ -99,6 +102,7 @@ export function createBalanceLabController(): BalanceLabController {
     resultsTab,
     replay,
     replayStep,
+    diagnostic,
     takeoverSession,
   });
 
@@ -166,6 +170,7 @@ export function createBalanceLabController(): BalanceLabController {
       progress = null;
       result = null;
       replay = null;
+      diagnostic = null;
       takeoverSession = null;
       resultsTab = 'overview';
       onChange?.();
@@ -189,8 +194,17 @@ export function createBalanceLabController(): BalanceLabController {
     },
     inspectMatch(matchId) {
       if (!result) return false;
+      const match = result.matches.find((candidate) => candidate.id === matchId);
+      if (!match) return false;
       replay = replayBalanceMatch(result, matchId);
       replayStep = replay ? Math.max(0, replay.snapshots.length - 1) : 0;
+      diagnostic = diagnoseBalanceMatch({
+        p1Hero: match.p1Hero,
+        p2Hero: match.p2Hero,
+        seed: match.seed,
+        maxActions: result.config.maxActions,
+        profile: result.config.profile,
+      });
       takeoverSession = null;
       return replay !== null;
     },

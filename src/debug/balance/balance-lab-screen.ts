@@ -2,6 +2,8 @@ import { Container, Graphics } from 'pixi.js';
 import { actionButton, label, pageTitle, surface } from '../../design-system/components/primitives';
 import { color, layout, spacing, type } from '../../design-system/tokens/tokens';
 import { heroIds, type HeroId } from '../../heroes/domain/hero-definition';
+import { analyzeBalanceResult } from './balance-analysis';
+import { runChargeTacticalBenchmark } from './charge-benchmark';
 import type { BalanceLabController, BalanceLabSnapshot, BalanceResultsTab, TunableProfileKey } from './balance-controller';
 
 export type BalanceLabView = 'setup' | 'cpu' | 'results' | 'inspect';
@@ -17,6 +19,7 @@ export interface BalanceLabScreenActions {
 
 const pct = (value: number): string => `${Math.round(value * 100)}%`;
 const displayNumber = (value: number): string => Number.isInteger(value) ? String(value) : value.toFixed(2);
+const heroName = (heroId: HeroId): string => heroId.toUpperCase();
 
 function addBack(root: Container, onBack: () => void): void {
   const button = actionButton('‹', 48, 48, onBack);
@@ -194,15 +197,27 @@ function stat(root: Container, x: number, y: number, titleText: string, value: s
 function renderOverview(root: Container, snapshot: BalanceLabSnapshot): void {
   const result = snapshot.result;
   if (!result) return;
-  stat(root, 24, 238, 'P1 win', pct(result.p1WinRate));
-  stat(root, 202, 238, 'Draw', pct(result.drawRate));
-  stat(root, 24, 326, 'Avg actions', result.avgActions.toFixed(1));
-  stat(root, 202, 326, 'P90 actions', String(result.p90Actions));
+  const analysis = analyzeBalanceResult(result);
+  const health = analysis.validity;
 
-  section(root, 'Hero outcomes', 424);
+  stat(root, 24, 238, 'P1 win', pct(result.p1WinRate));
+  stat(root, 202, 238, 'Valid', `${health.validGames}/${health.totalGames}`);
+  stat(root, 24, 326, 'Avg actions', result.avgActions.toFixed(1));
+  stat(root, 202, 326, 'Placement', pct(health.placementRate));
+
+  const healthLine = label(
+    `ERROR ${pct(health.errorRate)} · STALL ${pct(health.stalledRate)} · DRAW ${pct(result.drawRate)} · P90 ${result.p90Actions}`,
+    9,
+    health.errorRate > 0 ? color.danger : color.inkSoft,
+    '700',
+  );
+  healthLine.position.set(30, 414);
+  root.addChild(healthLine);
+
+  section(root, 'Hero outcomes', 448);
   result.heroes.forEach((hero, index) => {
-    const y = 450 + index * 34;
-    const name = label(hero.heroId.toUpperCase(), 11, color.ink, '700');
+    const y = 474 + index * 32;
+    const name = label(heroName(hero.heroId), 11, color.ink, '700');
     name.position.set(32, y);
     const metrics = label(`${pct(hero.winRate)} WIN · ${hero.abilityUsesPerGame.toFixed(1)} ABILITY/G`, 10, color.inkSoft, '600');
     metrics.anchor.set(1, 0);
@@ -210,9 +225,9 @@ function renderOverview(root: Container, snapshot: BalanceLabSnapshot): void {
     root.addChild(name, metrics);
   });
 
-  section(root, 'Conversions', 568);
+  section(root, 'Conversions', 578);
   result.conversions.slice(0, 4).forEach((item, index) => {
-    const y = 594 + index * 28;
+    const y = 604 + index * 27;
     const left = label(`${item.abilityId.toUpperCase()} · ${item.uses} USES`, 10, color.inkSoft, '600');
     left.position.set(32, y);
     const right = label(`${pct(item.rate)} WIN ≤2`, 10, item.rate >= 0.6 ? color.danger : color.gold, '700');
@@ -222,21 +237,58 @@ function renderOverview(root: Container, snapshot: BalanceLabSnapshot): void {
   });
 }
 
+function resultRow(root: Container, y: number, titleText: string, primary: string, secondary: string): void {
+  const row = surface(layout.contentWidth, 58, false);
+  row.position.set(layout.horizontalInset, y);
+  const titleNode = label(titleText, 10, color.ink, '700');
+  titleNode.position.set(34, y + 10);
+  const primaryNode = label(primary, 10, color.gold, '700');
+  primaryNode.anchor.set(1, 0);
+  primaryNode.position.set(356, y + 10);
+  const secondaryNode = label(secondary, 9, color.inkSoft, '600');
+  secondaryNode.position.set(34, y + 34);
+  root.addChild(row, titleNode, primaryNode, secondaryNode);
+}
+
 function renderMatchups(root: Container, snapshot: BalanceLabSnapshot): void {
   const result = snapshot.result;
   if (!result) return;
-  section(root, 'Directional matchups', 238);
-  result.matchups.slice(0, 10).forEach((item, index) => {
-    const y = 264 + index * 46;
-    const row = surface(layout.contentWidth, 38, false);
+  const analysis = analyzeBalanceResult(result);
+  const charge = runChargeTacticalBenchmark(result.config.profile, result.config.seed);
+
+  section(root, 'Seat-adjusted pairs', 238);
+  analysis.pairs.forEach((pair, index) => {
+    const y = 262 + index * 66;
+    resultRow(
+      root,
+      y,
+      `${heroName(pair.heroA)} ↔ ${heroName(pair.heroB)}`,
+      `${pct(pair.heroAWinRate)} / ${pct(pair.heroBWinRate)}`,
+      `${pair.validGames}/${pair.totalGames} VALID · ${pair.avgActions.toFixed(1)}A · PLACE ${pct(pair.placementRate)}`,
+    );
+  });
+
+  section(root, 'Mirror seat baseline', 466);
+  analysis.mirrors.forEach((mirror, index) => {
+    const y = 490 + index * 48;
+    const row = surface(layout.contentWidth, 40, false);
     row.position.set(layout.horizontalInset, y);
-    const name = label(`${item.p1Hero.toUpperCase()} → ${item.p2Hero.toUpperCase()}`, 10, color.ink, '700');
-    name.position.set(34, y + 12);
-    const metrics = label(`${pct(item.p1WinRate)} · ${item.avgActions.toFixed(1)}A`, 10, color.inkSoft, '700');
+    const name = label(heroName(mirror.heroId), 10, color.ink, '700');
+    name.position.set(34, y + 13);
+    const metrics = label(`P1 ${pct(mirror.p1WinRate)} · ${mirror.avgActions.toFixed(1)}A · ERR ${pct(mirror.errorRate)}`, 9, color.inkSoft, '700');
     metrics.anchor.set(1, 0);
-    metrics.position.set(356, y + 12);
+    metrics.position.set(356, y + 13);
     root.addChild(row, name, metrics);
   });
+
+  section(root, 'Charge tactical benchmark', 646);
+  const benchmark = surface(layout.contentWidth, 74, false);
+  benchmark.position.set(layout.horizontalInset, 670);
+  const benchmarkTitle = label(`${charge.chargeSelections}/${charge.total} SELECT CHARGE`, 12, color.ink, '700');
+  benchmarkTitle.position.set(38, 686);
+  const benchmarkResult = label(`${charge.immediateWins}/${charge.total} IMMEDIATE WIN`, 10, charge.immediateWinRate === 1 ? color.gold : color.danger, '700');
+  benchmarkResult.position.set(38, 714);
+  root.addChild(benchmark, benchmarkTitle, benchmarkResult);
 }
 
 function renderAnomalies(root: Container, controller: BalanceLabController, snapshot: BalanceLabSnapshot, actions: BalanceLabScreenActions): void {
@@ -253,7 +305,7 @@ function renderAnomalies(root: Container, controller: BalanceLabController, snap
     const y = 266 + index * 64;
     const row = surface(layout.contentWidth, 56, true);
     row.position.set(layout.horizontalInset, y);
-    const titleNode = label(`#${match.id} · ${match.p1Hero.toUpperCase()} vs ${match.p2Hero.toUpperCase()}`, 10, color.ink, '700');
+    const titleNode = label(`#${match.id} · ${heroName(match.p1Hero)} vs ${heroName(match.p2Hero)}`, 10, color.ink, '700');
     titleNode.position.set(36, y + 10);
     const flags = label(match.flags.slice(0, 2).join(' · ').toUpperCase(), 9, color.danger, '700');
     flags.position.set(36, y + 31);
@@ -315,36 +367,46 @@ function renderInspect(root: Container, controller: BalanceLabController, snapsh
   if (!replay) return;
   const state = replay.snapshots[snapshot.replayStep];
   const trace = snapshot.replayStep > 0 ? replay.actions[snapshot.replayStep - 1] : null;
-  const heading = pageTitle('DEBUG · MATCH INSPECTOR', `Match #${replay.match.id}`, `${replay.match.p1Hero.toUpperCase()} vs ${replay.match.p2Hero.toUpperCase()} · seed ${replay.match.seed}`);
+  const heading = pageTitle('DEBUG · MATCH INSPECTOR', `Match #${replay.match.id}`, `${heroName(replay.match.p1Hero)} vs ${heroName(replay.match.p2Hero)} · seed ${replay.match.seed}`);
   heading.position.set(layout.horizontalInset, 88);
   root.addChild(heading);
   const flags = label(replay.match.flags.join(' · ').toUpperCase() || 'UNFLAGGED', 9, replay.match.flags.length ? color.danger : color.muted, '700');
   flags.position.set(layout.horizontalInset, 166);
   root.addChild(flags);
 
-  drawBoard(root, state.match.board, 59, 210, 272);
+  const failure = snapshot.diagnostic?.failure;
+  const diagnosticText = failure
+    ? `${failure.reason.toUpperCase()} · LEGAL ${failure.legalActionCount} · BLOCKED ${failure.blockedEmptyCells}/${failure.emptyCells}`
+    : replay.match.status === 'stalled'
+      ? 'MAX ACTION CAP · NO RESOLVER FAILURE'
+      : 'DETERMINISTIC REPLAY · NO RESOLVER FAILURE';
+  const diagnostic = label(diagnosticText, 9, failure ? color.danger : color.inkSoft, '700');
+  diagnostic.position.set(layout.horizontalInset, 184);
+  root.addChild(diagnostic);
+
+  drawBoard(root, state.match.board, 59, 218, 272);
 
   const detail = surface(layout.contentWidth, 94, false);
-  detail.position.set(layout.horizontalInset, 510);
+  detail.position.set(layout.horizontalInset, 518);
   const step = label(`STEP ${snapshot.replayStep}/${replay.snapshots.length - 1} · TURN ${state.match.turn} · ${state.match.phase.toUpperCase()}`, 10, color.gold, '700');
-  step.position.set(36, 524);
-  const actionText = trace ? `${trace.heroId.toUpperCase()} · ${trace.abilityId?.toUpperCase() ?? 'PLACE'} · SCORE ${Math.round(trace.score)}` : 'INITIAL POSITION';
+  step.position.set(36, 532);
+  const actionText = trace ? `${heroName(trace.heroId)} · ${trace.abilityId?.toUpperCase() ?? 'PLACE'} · SCORE ${Math.round(trace.score)}` : 'INITIAL POSITION';
   const action = label(actionText, 10, color.ink, '700');
-  action.position.set(36, 550);
+  action.position.set(36, 558);
   const reasons = label(trace?.reasons.slice(0, 3).join(' · ') ?? '—', 9, color.inkSoft, '500');
-  reasons.position.set(36, 576);
+  reasons.position.set(36, 584);
   root.addChild(detail, step, action, reasons);
 
   const prev = actionButton('‹ PREV', 104, 48, () => { controller.moveReplayStep(-1); actions.onChange(); });
-  prev.position.set(24, 626);
+  prev.position.set(24, 634);
   const next = actionButton('NEXT ›', 104, 48, () => { controller.moveReplayStep(1); actions.onChange(); });
-  next.position.set(138, 626);
+  next.position.set(138, 634);
   const takeover = actionButton('TAKE OVER', 114, 48, () => { if (controller.createTakeover()) actions.onTakeover(); }, true);
-  takeover.position.set(252, 626);
+  takeover.position.set(252, 634);
   root.addChild(prev, next, takeover);
 
   const hint = label('TAKE OVER uses the nearest live P1 turn.\nYou play P1; P2 keeps the experiment CPU profile.', 10, color.inkSoft, '500');
-  hint.position.set(30, 698);
+  hint.position.set(30, 706);
   hint.style.lineHeight = 18;
   root.addChild(hint);
 }
