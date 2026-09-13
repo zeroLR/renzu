@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { aiDifficulty } from '../src/ai/difficulty/difficulty-profile';
 import { resolveAiTurn } from '../src/app/game-session/cpu-turn';
 import { createGameSession } from '../src/app/game-session/create-game-session';
+import { analyzeBalanceResult } from '../src/debug/balance/balance-analysis';
 import { diagnoseBalanceMatch } from '../src/debug/balance/balance-diagnostics';
+import { runChargeTacticalBenchmark } from '../src/debug/balance/charge-benchmark';
 import {
   createTakeoverSession,
   replayBalanceMatch,
@@ -62,35 +64,48 @@ describe('debug balance lab', () => {
     expect(first.patternEvents).toEqual(second.patternEvents);
   });
 
-  it('runs a complete directional 3 by 3 matrix', async () => {
+  it('runs a complete directional 3 by 3 matrix and exposes health analysis', async () => {
     const result = await runBalanceSimulation(config({
       scope: 'matrix',
       gamesPerSeat: 1,
       maxActions: 1,
     }), { yieldControl: async () => undefined });
+    const analysis = analyzeBalanceResult(result);
 
     expect(result.totalGames).toBe(9);
     expect(result.matchups).toHaveLength(9);
     expect(new Set(result.matchups.map((item) => `${item.p1Hero}>${item.p2Hero}`)).size).toBe(9);
+    expect(analysis.pairs).toHaveLength(3);
+    expect(analysis.mirrors).toHaveLength(3);
+    expect(analysis.validity.totalGames).toBe(9);
+    expect(analysis.validity.validGames + analysis.validity.errors + analysis.validity.stalled).toBe(9);
+    expect(analysis.validity.placementRate).toBeGreaterThanOrEqual(0);
+    expect(analysis.validity.placementRate).toBeLessThanOrEqual(1);
   });
 
-  it('diagnoses the observed arcanist mirror anomaly seeds', () => {
+  it('keeps the observed arcanist mirror anomaly seeds playable after the denial runway guardrail', () => {
     const matchIds = [204, 206, 223, 227, 230, 240, 250];
     const diagnostics = matchIds.map((matchId) => {
       const gameIndex = matchId - 201;
-      return {
-        matchId,
-        result: diagnoseBalanceMatch({
-          p1Hero: 'arcanist',
-          p2Hero: 'arcanist',
-          seed: 1337 + gameIndex * 9973,
-          maxActions: 120,
-        }),
-      };
+      return diagnoseBalanceMatch({
+        p1Hero: 'arcanist',
+        p2Hero: 'arcanist',
+        seed: 1337 + gameIndex * 9973,
+        maxActions: 120,
+      });
     });
 
-    console.info('Arcanist mirror diagnostics', JSON.stringify(diagnostics));
-    expect(diagnostics.every(({ result }) => result.failure !== null)).toBe(true);
+    expect(diagnostics.every((result) => result.completed && result.failure === null)).toBe(true);
+  });
+
+  it('benchmarks Vanguard Charge as an immediate-win tactical finisher', () => {
+    const benchmark = runChargeTacticalBenchmark(aiDifficulty('normal'), 7001);
+
+    expect(benchmark.total).toBe(12);
+    expect(benchmark.chargeSelections).toBe(12);
+    expect(benchmark.immediateWins).toBe(12);
+    expect(benchmark.chargeSelectionRate).toBe(1);
+    expect(benchmark.immediateWinRate).toBe(1);
   });
 
   it('can replay a flagged match and create a playable P1 takeover snapshot', async () => {
